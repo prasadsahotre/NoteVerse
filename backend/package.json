@@ -1,0 +1,24 @@
+{
+  "name": "noteverse-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@prisma/client": "^7.9.1",
+    "express": "your-existing-version"
+  },
+  "devDependencies": {
+    "@types/express": "your-existing-version",
+    "@types/node": "your-existing-version",
+    "prisma": "^7.9.1",
+    "tsx": "your-existing-version",
+    "typescript": "your-existing-version"
+  }
+}
