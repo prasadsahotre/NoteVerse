@@ -11,14 +11,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.9.1",
-    "express": "your-existing-version"
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@types/express": "your-existing-version",
-    "@types/node": "your-existing-version",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
     "prisma": "^7.9.1",
-    "tsx": "your-existing-version",
-    "typescript": "your-existing-version"
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
   }
 }
