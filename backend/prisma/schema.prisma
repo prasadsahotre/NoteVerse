@@ -49,4 +49,16 @@ model Course {
   updatedAt   DateTime @updatedAt
 
   educator    User @relation(fields: [educatorId], references: [id])
+  modules     Module[]
+}
+
+model Module {
+  id        Int      @id @default(autoincrement())
+  title     String
+  position  Int
+  courseId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course    Course   @relation(fields: [courseId], references: [id])
 }
