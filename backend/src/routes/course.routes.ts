@@ -25,6 +25,58 @@ router.get('/', async (_req, res) => {
   }
 })
 
+router.get('/:id', async (req, res) => {
+  try {
+    const courseId = Number(req.params.id)
+
+    if (Number.isNaN(courseId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid course ID',
+      })
+    }
+
+    const course = await prisma.course.findUnique({
+      where: {
+        id: courseId,
+      },
+      include: {
+        modules: {
+          orderBy: {
+            position: 'asc',
+          },
+          include: {
+            lessons: {
+              orderBy: {
+                position: 'asc',
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found',
+      })
+    }
+
+    res.json({
+      success: true,
+      data: course,
+    })
+  } catch (error) {
+    console.error('Failed to fetch course:', error)
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch course',
+    })
+  }
+})
+
 router.post('/', async (req, res) => {
   try {
     const { title, description, educatorId } = req.body
