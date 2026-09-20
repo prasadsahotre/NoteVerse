@@ -17,10 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roles            UserRole[]
-  createdCourses   Course[]
-  enrollments      Enrollment[]
-  lessonProgresses LessonProgress[]
+  roles          UserRole[]
+  createdCourses Course[]
+  enrollments    Enrollment[]
+  lessonProgress LessonProgress[]
+  quizAttempts   QuizAttempt[]
 }
 
 model Role {
@@ -76,8 +77,9 @@ model Lesson {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  module           Module           @relation(fields: [moduleId], references: [id])
-  lessonProgresses LessonProgress[]
+  module   Module           @relation(fields: [moduleId], references: [id])
+  progress LessonProgress[]
+  quizzes  Quiz[]
 }
 
 model Enrollment {
@@ -105,4 +107,50 @@ model LessonProgress {
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id        Int      @id @default(autoincrement())
+  title     String
+  lessonId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions Question[]
+  attempts  QuizAttempt[]
+}
+
+model Question {
+  id        Int      @id @default(autoincrement())
+  question  String
+  quizId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quiz    Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options Option[]
+}
+
+model Option {
+  id         Int      @id @default(autoincrement())
+  text       String
+  isCorrect  Boolean  @default(false)
+  questionId Int
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  quizId         Int
+  totalQuestions Int
+  correctAnswers Int
+  score          Int
+  attemptedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 }
