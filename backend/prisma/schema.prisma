@@ -17,9 +17,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roles          UserRole[]
-  createdCourses Course[]
-  enrollments    Enrollment[]
+  roles            UserRole[]
+  createdCourses   Course[]
+  enrollments      Enrollment[]
+  lessonProgresses LessonProgress[]
 }
 
 model Role {
@@ -75,7 +76,8 @@ model Lesson {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  module Module @relation(fields: [moduleId], references: [id])
+  module           Module           @relation(fields: [moduleId], references: [id])
+  lessonProgresses LessonProgress[]
 }
 
 model Enrollment {
@@ -88,4 +90,19 @@ model Enrollment {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  lessonId    Int
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
 }
