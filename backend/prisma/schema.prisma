@@ -10,23 +10,24 @@ datasource db {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
-  email     String     @unique
+  email     String   @unique
   password  String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  roles     UserRole[]
+  roles          UserRole[]
   createdCourses Course[]
+  enrollments    Enrollment[]
 }
 
 model Role {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
 
-  users     UserRole[]
+  users UserRole[]
 }
 
 model UserRole {
@@ -34,8 +35,8 @@ model UserRole {
   roleId    Int
   createdAt DateTime @default(now())
 
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
 }
@@ -48,8 +49,9 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  educator    User @relation(fields: [educatorId], references: [id])
+  educator    User         @relation(fields: [educatorId], references: [id])
   modules     Module[]
+  enrollments Enrollment[]
 }
 
 model Module {
@@ -60,8 +62,8 @@ model Module {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  course    Course   @relation(fields: [courseId], references: [id])
-  lessons   Lesson[]
+  course  Course   @relation(fields: [courseId], references: [id])
+  lessons Lesson[]
 }
 
 model Lesson {
@@ -73,5 +75,17 @@ model Lesson {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  module    Module   @relation(fields: [moduleId], references: [id])
+  module Module @relation(fields: [moduleId], references: [id])
+}
+
+model Enrollment {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
 }
