@@ -23,6 +23,7 @@ model User {
   lessonProgress  LessonProgress[]
   quizAttempts    QuizAttempt[]
   lessonQuestions LessonQuestion[]
+  courseReviews   CourseReview[]
 }
 
 model Role {
@@ -52,9 +53,10 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  educator    User         @relation(fields: [educatorId], references: [id])
+  educator    User           @relation(fields: [educatorId], references: [id])
   modules     Module[]
   enrollments Enrollment[]
+  reviews     CourseReview[]
 }
 
 model Module {
@@ -169,4 +171,19 @@ model LessonQuestion {
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+model CourseReview {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  review    String?
+  userId    Int
+  courseId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
 }
