@@ -4,6 +4,7 @@ import {
   authenticateToken,
   AuthRequest,
 } from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
@@ -253,7 +254,7 @@ router.get('/user/:userId/course/:courseId', async (req, res) => {
   }
 })
 
-router.post('/', authenticateToken, async (req: AuthRequest, res) => {
+router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
     const { courseId } = req.body
 
