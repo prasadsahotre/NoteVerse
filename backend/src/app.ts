@@ -9,6 +9,7 @@ import progressRoutes from './routes/progress.routes.js'
 import quizRoutes from './routes/quiz.routes.js'
 import lessonQuestionRoutes from './routes/lessonQuestion.routes.js'
 import courseReviewRoutes from './routes/courseReview.routes.js'
+import lessonResourceRoutes from './routes/lesson-resource.routes.js'
 
 const app = express()
 
@@ -24,5 +25,6 @@ app.use('/api/v1/progress', progressRoutes)
 app.use('/api/v1/quizzes', quizRoutes)
 app.use('/api/v1/lesson-questions', lessonQuestionRoutes)
 app.use('/api/v1/course-reviews', courseReviewRoutes)
+app.use('/api/v1/lesson-resources', lessonResourceRoutes)
 
 export default app

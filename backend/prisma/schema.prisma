@@ -90,6 +90,7 @@ model Lesson {
   progress  LessonProgress[]
   quizzes   Quiz[]
   questions LessonQuestion[]
+  resources LessonResource[]
 }
 
 model Enrollment {
@@ -192,4 +193,24 @@ model CourseReview {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+model LessonResource {
+  id        Int          @id @default(autoincrement())
+  title     String
+  type      ResourceType
+  url       String
+  lessonId  Int
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+enum ResourceType {
+  PDF
+  AUDIO
+  VIDEO
+  IMAGE
+  LINK
 }
