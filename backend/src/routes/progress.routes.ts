@@ -1,18 +1,16 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const userId = Number(req.params.userId)
-
-    if (Number.isNaN(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID',
-      })
-    }
+    const userId = req.user!.userId
 
     const user = await prisma.user.findUnique({
       where: {
@@ -60,20 +58,21 @@ router.get('/user/:userId', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const { userId, lessonId } = req.body
+    const { lessonId } = req.body
+    const userId = req.user!.userId
 
-    if (!userId || !lessonId) {
+    if (!lessonId) {
       return res.status(400).json({
         success: false,
-        message: 'userId and lessonId are required',
+        message: 'lessonId is required',
       })
     }
 
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(userId),
+        id: userId,
       },
     })
 
@@ -100,7 +99,7 @@ router.post('/', async (req, res) => {
     const progress = await prisma.lessonProgress.upsert({
       where: {
         userId_lessonId: {
-          userId: Number(userId),
+          userId: userId,
           lessonId: Number(lessonId),
         },
       },
@@ -109,7 +108,7 @@ router.post('/', async (req, res) => {
         completedAt: new Date(),
       },
       create: {
-        userId: Number(userId),
+        userId: userId,
         lessonId: Number(lessonId),
         completed: true,
         completedAt: new Date(),
@@ -131,12 +130,12 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.get('/user/:userId/course/:courseId', async (req, res) => {
+router.get('/user/:userId/course/:courseId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const userId = Number(req.params.userId)
+    const userId = req.user!.userId
     const courseId = Number(req.params.courseId)
 
-    if (Number.isNaN(userId) || Number.isNaN(courseId)) {
+    if (Number.isNaN(courseId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid user ID or course ID',
