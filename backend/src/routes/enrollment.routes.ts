@@ -1,5 +1,9 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
 
 const router = Router()
 
@@ -249,16 +253,18 @@ router.get('/user/:userId/course/:courseId', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { userId, courseId } = req.body
+    const { courseId } = req.body
 
-    if (!userId || !courseId) {
+    if (!courseId) {
       return res.status(400).json({
         success: false,
-        message: 'userId and courseId are required',
+        message: 'courseId is required',
       })
     }
+
+    const userId = req.user!.userId
 
     const user = await prisma.user.findUnique({
       where: {
