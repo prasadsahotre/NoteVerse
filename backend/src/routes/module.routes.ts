@@ -1,6 +1,10 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 const router = Router()
 
 router.get('/', async (_req, res) => {
@@ -30,7 +34,7 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const { title, position, courseId } = req.body
 
@@ -51,6 +55,15 @@ router.post('/', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Course not found',
+      })
+    }
+
+    const educatorId = req.user!.userId
+
+    if (course.educatorId !== educatorId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only create modules in your own course',
       })
     }
 
@@ -77,7 +90,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const moduleId = Number(req.params.id)
     const { educatorId, title, position } = req.body
@@ -89,21 +102,6 @@ router.patch('/:id', async (req, res) => {
       })
     }
 
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
-      })
-    }
 
     const existingModule = await prisma.module.findUnique({
       where: {
@@ -121,7 +119,7 @@ router.patch('/:id', async (req, res) => {
       })
     }
 
-    if (existingModule.course.educatorId !== numericEducatorId) {
+    if (existingModule.course.educatorId !== req.user!.userId) {
       return res.status(403).json({
         success: false,
         message: 'You can only update modules in your own course',
@@ -160,31 +158,14 @@ router.patch('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const moduleId = Number(req.params.id)
-    const { educatorId } = req.body
 
     if (Number.isNaN(moduleId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid module ID',
-      })
-    }
-
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
       })
     }
 
@@ -204,7 +185,7 @@ router.delete('/:id', async (req, res) => {
       })
     }
 
-    if (existingModule.course.educatorId !== numericEducatorId) {
+    if (existingModule.course.educatorId !== req.user!.userId) {
       return res.status(403).json({
         success: false,
         message: 'You can only delete modules in your own course',
