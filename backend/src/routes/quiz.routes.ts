@@ -1,16 +1,21 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
-    const { title, lessonId, educatorId } = req.body
+    const { title, lessonId } = req.body
 
-    if (!title || !lessonId || !educatorId) {
+    if (!title || !lessonId) {
       return res.status(400).json({
         success: false,
-        message: 'Title, lessonId and educatorId are required',
+        message: 'Title and lessonId are required',
       })
     }
 
@@ -33,6 +38,8 @@ router.post('/', async (req, res) => {
         message: 'Lesson not found',
       })
     }
+
+    const educatorId = req.user!.userId
 
     if (lesson.module.course.educatorId !== Number(educatorId)) {
       return res.status(403).json({
@@ -63,14 +70,14 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.post('/questions', async (req, res) => {
+router.post('/questions',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
-    const { quizId, question, options, educatorId } = req.body
+    const { quizId, question, options } = req.body
 
-    if (!quizId || !question || !Array.isArray(options) || !educatorId) {
+    if (!quizId || !question || !Array.isArray(options)) {
       return res.status(400).json({
         success: false,
-        message: 'quizId, question, options and educatorId are required',
+        message: 'quizId, question and options are required',
       })
     }
 
@@ -115,6 +122,8 @@ router.post('/questions', async (req, res) => {
         message: 'Quiz not found',
       })
     }
+
+    const educatorId = req.user!.userId
 
     if (quiz.lesson.module.course.educatorId !== Number(educatorId)) {
       return res.status(403).json({
@@ -281,10 +290,11 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.post('/:id/submit', async (req, res) => {
+router.post('/:id/submit',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
     const quizId = Number(req.params.id)
-    const { userId, answers } = req.body
+    const { answers } = req.body
+    const userId = req.user!.userId
 
     if (Number.isNaN(quizId)) {
       return res.status(400).json({
@@ -293,10 +303,10 @@ router.post('/:id/submit', async (req, res) => {
       })
     }
 
-    if (!userId || !Array.isArray(answers)) {
+    if (!Array.isArray(answers)) {
       return res.status(400).json({
         success: false,
-        message: 'userId and answers are required',
+        message: 'answers are required',
       })
     }
 
@@ -332,7 +342,7 @@ router.post('/:id/submit', async (req, res) => {
     const enrollment = await prisma.enrollment.findUnique({
       where: {
         userId_courseId: {
-          userId: Number(userId),
+          userId,
           courseId: quiz.lesson.module.courseId,
         },
       },
@@ -347,7 +357,7 @@ router.post('/:id/submit', async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(userId),
+        id: userId,
       },
     })
 
@@ -412,7 +422,7 @@ router.post('/:id/submit', async (req, res) => {
 
     const attempt = await prisma.quizAttempt.create({
     data: {
-        userId: Number(userId),
+        userId,
         quizId,
         totalQuestions,
         correctAnswers,
