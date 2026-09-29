@@ -5,12 +5,12 @@ const router = Router()
 
 router.post('/', async (req, res) => {
   try {
-    const { title, lessonId } = req.body
+    const { title, lessonId, educatorId } = req.body
 
-    if (!title || !lessonId) {
+    if (!title || !lessonId || !educatorId) {
       return res.status(400).json({
         success: false,
-        message: 'Title and lessonId are required',
+        message: 'Title, lessonId and educatorId are required',
       })
     }
 
@@ -18,12 +18,26 @@ router.post('/', async (req, res) => {
       where: {
         id: Number(lessonId),
       },
+      include: {
+        module: {
+          include: {
+            course: true,
+          },
+        },
+      },
     })
 
     if (!lesson) {
       return res.status(404).json({
         success: false,
         message: 'Lesson not found',
+      })
+    }
+
+    if (lesson.module.course.educatorId !== Number(educatorId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only create quizzes for your own courses',
       })
     }
 
@@ -51,12 +65,12 @@ router.post('/', async (req, res) => {
 
 router.post('/questions', async (req, res) => {
   try {
-    const { quizId, question, options } = req.body
+    const { quizId, question, options, educatorId } = req.body
 
-    if (!quizId || !question || !Array.isArray(options)) {
+    if (!quizId || !question || !Array.isArray(options) || !educatorId) {
       return res.status(400).json({
         success: false,
-        message: 'quizId, question and options are required',
+        message: 'quizId, question, options and educatorId are required',
       })
     }
 
@@ -82,12 +96,30 @@ router.post('/questions', async (req, res) => {
       where: {
         id: Number(quizId),
       },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     if (!quiz) {
       return res.status(404).json({
         success: false,
         message: 'Quiz not found',
+      })
+    }
+
+    if (quiz.lesson.module.course.educatorId !== Number(educatorId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only add questions to quizzes in your own courses',
       })
     }
 
