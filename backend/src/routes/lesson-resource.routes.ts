@@ -1,5 +1,10 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
@@ -52,27 +57,23 @@ router.get('/lesson/:lessonId', async (req, res) => {
 })
 
 // Create a resource
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
-    const { title, type, url, lessonId, educatorId } = req.body
+    const { title, type, url, lessonId } = req.body
 
-    if (!title || !type || !url || !lessonId || !educatorId) {
+    if (!title || !type || !url || !lessonId) {
       return res.status(400).json({
         success: false,
-        message: 'Title, type, url, lessonId and educatorId are required',
+        message: 'Title, type, url and lessonId are required',
       })
     }
 
     const numericLessonId = Number(lessonId)
-    const numericEducatorId = Number(educatorId)
 
-    if (
-      Number.isNaN(numericLessonId) ||
-      Number.isNaN(numericEducatorId)
-    ) {
+    if (Number.isNaN(numericLessonId)) {
       return res.status(400).json({
         success: false,
-        message: 'lessonId and educatorId must be valid numbers',
+        message: 'lessonId must be a valid number',
       })
     }
 
@@ -96,7 +97,9 @@ router.post('/', async (req, res) => {
       })
     }
 
-    if (lesson.module.course.educatorId !== numericEducatorId) {
+    const educatorId = req.user!.userId
+
+    if (lesson.module.course.educatorId !== educatorId) {
       return res.status(403).json({
         success: false,
         message: 'You can only add resources to your own course',
@@ -128,31 +131,15 @@ router.post('/', async (req, res) => {
 })
 
 // Update a resource
-router.patch('/:id', async (req, res) => {
+router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const resourceId = Number(req.params.id)
-    const { educatorId, title, type, url } = req.body
+    const { title, type, url } = req.body
 
     if (Number.isNaN(resourceId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid resource ID',
-      })
-    }
-
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
       })
     }
 
@@ -191,9 +178,11 @@ router.patch('/:id', async (req, res) => {
       })
     }
 
+    const educatorId = req.user!.userId
+
     if (
       existingResource.lesson.module.course.educatorId !==
-      numericEducatorId
+      educatorId
     ) {
       return res.status(403).json({
         success: false,
@@ -228,31 +217,14 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete a resource
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const resourceId = Number(req.params.id)
-    const { educatorId } = req.body
 
     if (Number.isNaN(resourceId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid resource ID',
-      })
-    }
-
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
       })
     }
 
@@ -280,9 +252,11 @@ router.delete('/:id', async (req, res) => {
       })
     }
 
+    const educatorId = req.user!.userId
+
     if (
       existingResource.lesson.module.course.educatorId !==
-      numericEducatorId
+      educatorId
     ) {
       return res.status(403).json({
         success: false,
