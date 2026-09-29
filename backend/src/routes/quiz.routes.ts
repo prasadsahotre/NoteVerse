@@ -165,9 +165,9 @@ router.post('/questions',authenticateToken,requireRole('EDUCATOR'),async (req: A
   }
 })
 
-router.get('/attempts/user/:userId', async (req, res) => {
+router.get('/attempts/user/:userId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const userId = Number(req.params.userId)
+    const userId = req.user!.userId
 
     if (Number.isNaN(userId)) {
       return res.status(400).json({
