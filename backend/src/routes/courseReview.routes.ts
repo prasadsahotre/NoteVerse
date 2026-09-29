@@ -1,21 +1,27 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
 // Create a course review
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const { userId, courseId, rating, review } = req.body
+    const { courseId, rating, review } = req.body
+    const userId = req.user!.userId
 
-    if (!userId || !courseId || !rating) {
+    if (!courseId || !rating) {
       return res.status(400).json({
         success: false,
-        message: 'userId, courseId and rating are required',
+        message: 'courseId and rating are required',
       })
     }
 
-    const numericUserId = Number(userId)
+    const numericUserId = userId
     const numericCourseId = Number(courseId)
     const numericRating = Number(rating)
 
@@ -173,10 +179,11 @@ router.get('/course/:courseId', async (req, res) => {
 })
 
 // Update a course review
-router.patch('/:id', async (req, res) => {
+router.patch('/:id',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
     const reviewId = Number(req.params.id)
-    const { userId, rating, review } = req.body
+    const { rating, review } = req.body
+    const userId = req.user!.userId
 
     if (Number.isNaN(reviewId)) {
       return res.status(400).json({
@@ -185,14 +192,14 @@ router.patch('/:id', async (req, res) => {
       })
     }
 
-    if (!userId || !rating) {
+    if (!rating) {
       return res.status(400).json({
         success: false,
         message: 'userId and rating are required',
       })
     }
 
-    const numericUserId = Number(userId)
+    const numericUserId = userId
     const numericRating = Number(rating)
 
     if (
@@ -258,31 +265,15 @@ router.patch('/:id', async (req, res) => {
 })
 
 // Delete a course review
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
     const reviewId = Number(req.params.id)
-    const { userId } = req.body
+    const userId = req.user!.userId
 
     if (Number.isNaN(reviewId)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid review ID',
-      })
-    }
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'userId is required',
-      })
-    }
-
-    const numericUserId = Number(userId)
-
-    if (Number.isNaN(numericUserId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'userId must be a valid number',
       })
     }
 
@@ -299,7 +290,7 @@ router.delete('/:id', async (req, res) => {
       })
     }
 
-    if (existingReview.userId !== numericUserId) {
+    if (existingReview.userId !== userId) {
       return res.status(403).json({
         success: false,
         message: 'You can only delete your own review',
