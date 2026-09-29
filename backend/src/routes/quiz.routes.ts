@@ -305,6 +305,15 @@ router.post('/:id/submit', async (req, res) => {
         id: quizId,
       },
       include: {
+        lesson: {
+          include: {
+            module: {
+              select: {
+                courseId: true,
+              },
+            },
+          },
+        },
         questions: {
           include: {
             options: true,
@@ -319,6 +328,22 @@ router.post('/:id/submit', async (req, res) => {
         message: 'Quiz not found',
       })
     }
+
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: Number(userId),
+          courseId: quiz.lesson.module.courseId,
+        },
+      },
+    })
+
+if (!enrollment) {
+  return res.status(403).json({
+    success: false,
+    message: 'Student is not enrolled in this course',
+  })
+}
 
     const user = await prisma.user.findUnique({
       where: {
