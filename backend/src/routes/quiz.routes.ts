@@ -338,12 +338,12 @@ router.post('/:id/submit', async (req, res) => {
       },
     })
 
-if (!enrollment) {
-  return res.status(403).json({
-    success: false,
-    message: 'Student is not enrolled in this course',
-  })
-}
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'Student is not enrolled in this course',
+      })
+    }
 
     const user = await prisma.user.findUnique({
       where: {
@@ -360,20 +360,45 @@ if (!enrollment) {
 
     let correctAnswers = 0
 
+    const answeredQuestionIds = new Set<number>()
+
+    for (const answer of answers) {
+      const questionId = Number(answer.questionId)
+
+      if (answeredQuestionIds.has(questionId)) {
+        return res.status(400).json({
+          success: false,
+          message: `Question ${questionId} was answered more than once`,
+        })
+      }
+
+      answeredQuestionIds.add(questionId)
+    }
+
     for (const answer of answers) {
       const question = quiz.questions.find(
         (item) => item.id === Number(answer.questionId)
       )
 
       if (!question) {
-        continue
+        return res.status(400).json({
+          success: false,
+          message: `Question ${answer.questionId} does not belong to this quiz`,
+        })
       }
 
       const selectedOption = question.options.find(
         (option) => option.id === Number(answer.optionId)
       )
 
-      if (selectedOption?.isCorrect) {
+      if (!selectedOption) {
+        return res.status(400).json({
+          success: false,
+          message: `Option ${answer.optionId} does not belong to question ${answer.questionId}`,
+        })
+      }
+
+      if (selectedOption.isCorrect) {
         correctAnswers++
       }
     }
