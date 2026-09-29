@@ -1,5 +1,10 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
@@ -145,16 +150,18 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
-    const { title, description, educatorId } = req.body
+    const { title, description } = req.body
 
-    if (!title || !educatorId) {
+    if (!title) {
       return res.status(400).json({
         success: false,
-        message: 'Title and educatorId are required',
+        message: 'Title is required',
       })
     }
+
+    const educatorId = req.user!.userId
 
     const educator = await prisma.user.findUnique({
       where: {
@@ -192,231 +199,194 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.patch('/:id', async (req, res) => {
-  try {
-    const courseId = Number(req.params.id)
-    const { educatorId, title, description } = req.body
+router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.id)
+      const { title, description } = req.body
 
-    if (Number.isNaN(courseId)) {
-      return res.status(400).json({
+      if (Number.isNaN(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const educatorId = req.user!.userId
+
+      const existingCourse = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+      })
+
+      if (!existingCourse) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      if (existingCourse.educatorId !== educatorId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only update your own course',
+        })
+      }
+
+      if (!title && description === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nothing to update',
+        })
+      }
+
+      const updatedCourse = await prisma.course.update({
+        where: {
+          id: courseId,
+        },
+        data: {
+          ...(title && { title }),
+          ...(description !== undefined && { description }),
+        },
+      })
+
+      res.json({
+        success: true,
+        message: 'Course updated successfully',
+        data: updatedCourse,
+      })
+    } catch (error) {
+      console.error('Failed to update course:', error)
+
+      res.status(500).json({
         success: false,
-        message: 'Invalid course ID',
+        message: 'Failed to update course',
       })
     }
+  },
+)
 
-    if (!educatorId) {
-      return res.status(400).json({
+router.patch('/:id/publish',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.id)
+
+      if (Number.isNaN(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const educatorId = req.user!.userId
+
+      const existingCourse = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+      })
+
+      if (!existingCourse) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      if (existingCourse.educatorId !== educatorId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only publish your own course',
+        })
+      }
+
+      if (existingCourse.status === 'PUBLISHED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Course is already published',
+        })
+      }
+
+      const publishedCourse = await prisma.course.update({
+        where: {
+          id: courseId,
+        },
+        data: {
+          status: 'PUBLISHED',
+        },
+      })
+
+      res.json({
+        success: true,
+        message: 'Course published successfully',
+        data: publishedCourse,
+      })
+    } catch (error) {
+      console.error('Failed to publish course:', error)
+
+      res.status(500).json({
         success: false,
-        message: 'educatorId is required',
+        message: 'Failed to publish course',
       })
     }
+  },
+)
 
-    const numericEducatorId = Number(educatorId)
+router.delete(
+  '/:id',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.id)
 
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
+      if (Number.isNaN(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const educatorId = req.user!.userId
+
+      const existingCourse = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+      })
+
+      if (!existingCourse) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      if (existingCourse.educatorId !== educatorId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only delete your own course',
+        })
+      }
+
+      await prisma.course.delete({
+        where: {
+          id: courseId,
+        },
+      })
+
+      res.json({
+        success: true,
+        message: 'Course deleted successfully',
+      })
+    } catch (error) {
+      console.error('Failed to delete course:', error)
+
+      res.status(500).json({
         success: false,
-        message: 'educatorId must be a valid number',
+        message: 'Failed to delete course',
       })
     }
-
-    const existingCourse = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-    })
-
-    if (!existingCourse) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found',
-      })
-    }
-
-    if (existingCourse.educatorId !== numericEducatorId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only update your own course',
-      })
-    }
-
-    if (!title && description === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nothing to update',
-      })
-    }
-
-    const updatedCourse = await prisma.course.update({
-      where: {
-        id: courseId,
-      },
-      data: {
-        ...(title && { title }),
-        ...(description !== undefined && { description }),
-      },
-    })
-
-    res.json({
-      success: true,
-      message: 'Course updated successfully',
-      data: updatedCourse,
-    })
-  } catch (error) {
-    console.error('Failed to update course:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update course',
-    })
-  }
-})
-
-router.patch('/:id/publish', async (req, res) => {
-  try {
-    const courseId = Number(req.params.id)
-    const { educatorId } = req.body
-
-    if (Number.isNaN(courseId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid course ID',
-      })
-    }
-
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
-      })
-    }
-
-    const existingCourse = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-    })
-
-    if (!existingCourse) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found',
-      })
-    }
-
-    if (existingCourse.educatorId !== numericEducatorId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only publish your own course',
-      })
-    }
-
-    if (existingCourse.status === 'PUBLISHED') {
-      return res.status(400).json({
-        success: false,
-        message: 'Course is already published',
-      })
-    }
-
-    const publishedCourse = await prisma.course.update({
-      where: {
-        id: courseId,
-      },
-      data: {
-        status: 'PUBLISHED',
-      },
-    })
-
-    res.json({
-      success: true,
-      message: 'Course published successfully',
-      data: publishedCourse,
-    })
-  } catch (error) {
-    console.error('Failed to publish course:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to publish course',
-    })
-  }
-})
-
-router.delete('/:id', async (req, res) => {
-  try {
-    const courseId = Number(req.params.id)
-    const { educatorId } = req.body
-
-    if (Number.isNaN(courseId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid course ID',
-      })
-    }
-
-    if (!educatorId) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId is required',
-      })
-    }
-
-    const numericEducatorId = Number(educatorId)
-
-    if (Number.isNaN(numericEducatorId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'educatorId must be a valid number',
-      })
-    }
-
-    const existingCourse = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-    })
-
-    if (!existingCourse) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found',
-      })
-    }
-
-    if (existingCourse.educatorId !== numericEducatorId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only delete your own course',
-      })
-    }
-
-    await prisma.course.delete({
-      where: {
-        id: courseId,
-      },
-    })
-
-    res.json({
-      success: true,
-      message: 'Course deleted successfully',
-    })
-  } catch (error) {
-    console.error('Failed to delete course:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete course',
-    })
-  }
-})
+  },
+)
 
 export default router
