@@ -19,6 +19,15 @@ router.post('/', async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim()
 
+    const normalizedRole = role.toUpperCase()
+
+    if (!['STUDENT', 'EDUCATOR'].includes(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Use STUDENT or EDUCATOR',
+      })
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     })
@@ -31,7 +40,7 @@ router.post('/', async (req, res) => {
     }
 
     const selectedRole = await prisma.role.findUnique({
-      where: { name: role.toUpperCase() },
+      where: { name: normalizedRole },
     })
 
     if (!selectedRole) {

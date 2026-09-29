@@ -78,6 +78,7 @@ router.get('/educator/:educatorId', async (req, res) => {
     const courses = await prisma.course.findMany({
       where: {
         educatorId,
+        status: 'PUBLISHED',
       },
       orderBy: {
         createdAt: 'desc',
@@ -109,9 +110,10 @@ router.get('/:id', async (req, res) => {
       })
     }
 
-    const course = await prisma.course.findUnique({
+    const course = await prisma.course.findFirst({
       where: {
         id: courseId,
+        status: 'PUBLISHED',
       },
       include: {
         modules: {

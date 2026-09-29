@@ -8,7 +8,7 @@ import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
-router.get('/', async (_req, res) => {
+router.get('/',authenticateToken,requireRole('EDUCATOR'),async (_req, res) => {
   try {
     const enrollments = await prisma.enrollment.findMany({
       orderBy: {
@@ -46,16 +46,9 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const userId = Number(req.params.userId)
-
-    if (Number.isNaN(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID',
-      })
-    }
+    const userId = req.user!.userId
 
     const user = await prisma.user.findUnique({
       where: {
@@ -103,17 +96,10 @@ router.get('/user/:userId', async (req, res) => {
   }
 })
 
-router.get('/user/:userId/course/:courseId', async (req, res) => {
+router.get('/user/:userId/course/:courseId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const userId = Number(req.params.userId)
+    const userId = req.user!.userId
     const courseId = Number(req.params.courseId)
-
-    if (Number.isNaN(userId) || Number.isNaN(courseId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID or course ID',
-      })
-    }
 
     const user = await prisma.user.findUnique({
       where: {
