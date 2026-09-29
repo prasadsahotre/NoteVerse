@@ -1,23 +1,29 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
+import {
+  authenticateToken,
+  AuthRequest,
+} from '../middleware/auth.middleware.js'
+import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
 // Ask a question about a lesson
-router.post('/', async (req, res) => {
+router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
-    const { userId, lessonId, question } = req.body
+    const { lessonId, question } = req.body
+    const userId = req.user!.userId
 
-    if (!userId || !lessonId || !question) {
+    if (!lessonId || !question) {
       return res.status(400).json({
         success: false,
-        message: 'userId, lessonId and question are required',
+        message: 'lessonId and question are required',
       })
     }
 
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(userId),
+        id: userId,
       },
     })
 
@@ -43,7 +49,7 @@ router.post('/', async (req, res) => {
 
     const lessonQuestion = await prisma.lessonQuestion.create({
       data: {
-        userId: Number(userId),
+        userId: userId,
         lessonId: Number(lessonId),
         question: question.trim(),
       },
@@ -65,7 +71,7 @@ router.post('/', async (req, res) => {
 })
 
 // Answer a lesson question
-router.patch('/:id/answer', async (req, res) => {
+router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
   try {
     const questionId = Number(req.params.id)
     const { answer } = req.body
@@ -88,12 +94,33 @@ router.patch('/:id/answer', async (req, res) => {
       where: {
         id: questionId,
       },
+      include: {
+        lesson: {
+          include: {
+            module: {
+              include: {
+                course: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     if (!lessonQuestion) {
       return res.status(404).json({
         success: false,
         message: 'Question not found',
+      })
+    }
+
+    if (
+      lessonQuestion.lesson.module.course.educatorId !==
+      req.user!.userId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only answer questions in your own courses',
       })
     }
 
