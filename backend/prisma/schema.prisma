@@ -24,6 +24,7 @@ model User {
   quizAttempts    QuizAttempt[]
   lessonQuestions LessonQuestion[]
   courseReviews   CourseReview[]
+  certificates Certificate[]
 }
 
 model Role {
@@ -58,6 +59,7 @@ model Course {
   modules     Module[]
   enrollments Enrollment[]
   reviews     CourseReview[]
+  certificates Certificate[]
 }
 
 enum CourseStatus {
@@ -214,4 +216,17 @@ enum ResourceType {
   VIDEO
   IMAGE
   LINK
+}
+
+model Certificate {
+  id            Int      @id @default(autoincrement())
+  certificateNo String   @unique
+  userId        Int
+  courseId      Int
+  issuedAt      DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
 }
