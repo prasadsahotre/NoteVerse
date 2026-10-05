@@ -137,4 +137,171 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
   },
 )
 
+router.get('/courses',authenticateToken,requireRole('ADMIN'),async (_req: AuthRequest, res) => {
+    try {
+      const courses = await prisma.course.findMany({
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          educator: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          _count: {
+            select: {
+              enrollments: true,
+              modules: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+
+      return res.json({
+        success: true,
+        data: courses.map((course) => ({
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          status: course.status,
+          educator: course.educator,
+          enrollmentCount: course._count.enrollments,
+          moduleCount: course._count.modules,
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+        })),
+      })
+    } catch (error) {
+      console.error('Admin courses error:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch courses',
+      })
+    }
+  },
+)
+
+router.get('/courses',authenticateToken,requireRole('ADMIN'),async (_req: AuthRequest, res) => {
+    try {
+      const courses = await prisma.course.findMany({
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          educator: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          _count: {
+            select: {
+              enrollments: true,
+              modules: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      })
+
+      return res.json({
+        success: true,
+        data: courses.map((course) => ({
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          status: course.status,
+          educator: course.educator,
+          enrollmentCount: course._count.enrollments,
+          moduleCount: course._count.modules,
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+        })),
+      })
+    } catch (error) {
+      console.error('Admin courses error:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch courses',
+      })
+    }
+  },
+)
+
+router.patch('/courses/:id/status',authenticateToken,requireRole('ADMIN'),async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.id)
+      const { status } = req.body
+
+      if (Number.isNaN(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const normalizedStatus = String(status || '').toUpperCase()
+
+      if (!['DRAFT', 'PUBLISHED'].includes(normalizedStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status. Use DRAFT or PUBLISHED',
+        })
+      }
+
+      const existingCourse = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+      })
+
+      if (!existingCourse) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      const updatedCourse = await prisma.course.update({
+        where: {
+          id: courseId,
+        },
+        data: {
+          status: normalizedStatus as 'DRAFT' | 'PUBLISHED',
+        },
+      })
+
+      return res.json({
+        success: true,
+        message: 'Course status updated successfully',
+        data: updatedCourse,
+      })
+    } catch (error) {
+      console.error('Admin course status update error:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update course status',
+      })
+    }
+  },
+)
+
 export default router
