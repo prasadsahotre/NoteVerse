@@ -11,6 +11,7 @@ import lessonQuestionRoutes from './routes/lessonQuestion.routes.js'
 import courseReviewRoutes from './routes/courseReview.routes.js'
 import lessonResourceRoutes from './routes/lesson-resource.routes.js'
 import certificateRoutes from './routes/certificate.routes.js'
+import analyticsRoutes from './routes/analytics.routes.js'
 
 const app = express()
 
@@ -28,5 +29,6 @@ app.use('/api/v1/lesson-questions', lessonQuestionRoutes)
 app.use('/api/v1/course-reviews', courseReviewRoutes)
 app.use('/api/v1/lesson-resources', lessonResourceRoutes)
 app.use('/api/v1/certificates', certificateRoutes)
+app.use('/api/v1/analytics', analyticsRoutes)
 
 export default app
