@@ -8,213 +8,279 @@ import { requireRole } from '../middleware/role.middleware.js'
 
 const router = Router()
 
-router.get('/user/:userId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user!.userId
+// Get all progress for the logged-in student
+router.get(
+  '/user/:userId',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.userId
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    })
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
       })
-    }
 
-    const progress = await prisma.lessonProgress.findMany({
-      where: {
-        userId,
-      },
-      orderBy: {
-        updatedAt: 'desc',
-      },
-      include: {
-        lesson: {
-          select: {
-            id: true,
-            title: true,
-            position: true,
-            moduleId: true,
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        })
+      }
+
+      const progress = await prisma.lessonProgress.findMany({
+        where: {
+          userId,
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              title: true,
+              position: true,
+              moduleId: true,
+            },
           },
         },
-      },
-    })
+      })
 
-    res.json({
-      success: true,
-      data: progress,
-    })
-  } catch (error) {
-    console.error('Failed to fetch lesson progress:', error)
+      return res.json({
+        success: true,
+        data: progress,
+      })
+    } catch (error) {
+      console.error('Failed to fetch lesson progress:', error)
 
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch lesson progress',
-    })
-  }
-})
-
-router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const { lessonId } = req.body
-    const userId = req.user!.userId
-
-    if (!lessonId) {
-      return res.status(400).json({
+      return res.status(500).json({
         success: false,
-        message: 'lessonId is required',
+        message: 'Failed to fetch lesson progress',
       })
     }
+  },
+)
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    })
+// Mark a lesson as completed
+router.post(
+  '/',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      const { lessonId } = req.body
+      const userId = req.user!.userId
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      })
-    }
+      if (!lessonId) {
+        return res.status(400).json({
+          success: false,
+          message: 'lessonId is required',
+        })
+      }
 
-    const lesson = await prisma.lesson.findUnique({
-      where: {
-        id: Number(lessonId),
-      },
-    })
+      const numericLessonId = Number(lessonId)
 
-    if (!lesson) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lesson not found',
-      })
-    }
+      if (!Number.isInteger(numericLessonId) || numericLessonId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'lessonId must be a valid positive integer',
+        })
+      }
 
-    const progress = await prisma.lessonProgress.upsert({
-      where: {
-        userId_lessonId: {
-          userId: userId,
-          lessonId: Number(lessonId),
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
         },
-      },
-      update: {
-        completed: true,
-        completedAt: new Date(),
-      },
-      create: {
-        userId: userId,
-        lessonId: Number(lessonId),
-        completed: true,
-        completedAt: new Date(),
-      },
-    })
-
-    res.status(200).json({
-      success: true,
-      message: 'Lesson marked as completed',
-      data: progress,
-    })
-  } catch (error) {
-    console.error('Failed to update lesson progress:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update lesson progress',
-    })
-  }
-})
-
-router.get('/user/:userId/course/:courseId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user!.userId
-    const courseId = Number(req.params.courseId)
-
-    if (Number.isNaN(courseId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID or course ID',
       })
-    }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    })
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        })
+      }
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      })
-    }
-
-    const course = await prisma.course.findUnique({
-      where: {
-        id: courseId,
-      },
-      include: {
-        modules: {
-          include: {
-            lessons: true,
-          },
+      const lesson = await prisma.lesson.findUnique({
+        where: {
+          id: numericLessonId,
         },
-      },
-    })
-
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found',
-      })
-    }
-
-    const totalLessons = course.modules.reduce(
-      (total, module) => total + module.lessons.length,
-      0
-    )
-
-    const completedLessons = await prisma.lessonProgress.count({
-      where: {
-        userId,
-        completed: true,
-        lesson: {
+        include: {
           module: {
+            select: {
+              courseId: true,
+            },
+          },
+        },
+      })
+
+      if (!lesson) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lesson not found',
+        })
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: lesson.module.courseId,
+          },
+        },
+      })
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to update progress',
+        })
+      }
+
+      const progress = await prisma.lessonProgress.upsert({
+        where: {
+          userId_lessonId: {
+            userId,
+            lessonId: numericLessonId,
+          },
+        },
+        update: {
+          completed: true,
+          completedAt: new Date(),
+        },
+        create: {
+          userId,
+          lessonId: numericLessonId,
+          completed: true,
+          completedAt: new Date(),
+        },
+      })
+
+      return res.status(200).json({
+        success: true,
+        message: 'Lesson marked as completed',
+        data: progress,
+      })
+    } catch (error) {
+      console.error('Failed to update lesson progress:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update lesson progress',
+      })
+    }
+  },
+)
+
+// Get progress for a specific course
+router.get(
+  '/user/:userId/course/:courseId',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.userId
+      const courseId = Number(req.params.courseId)
+
+      if (!Number.isInteger(courseId) || courseId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+      })
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        })
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
             courseId,
           },
         },
-      },
-    })
+      })
 
-    const progressPercentage =
-      totalLessons === 0
-        ? 0
-        : Math.round((completedLessons / totalLessons) * 100)
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to view progress',
+        })
+      }
 
-    res.json({
-      success: true,
-      data: {
-        courseId: course.id,
-        courseTitle: course.title,
-        totalLessons,
-        completedLessons,
-        progressPercentage,
-      },
-    })
-  } catch (error) {
-    console.error('Failed to fetch course progress:', error)
+      const course = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+        include: {
+          modules: {
+            include: {
+              lessons: true,
+            },
+          },
+        },
+      })
 
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch course progress',
-    })
-  }
-})
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      const totalLessons = course.modules.reduce(
+        (total, module) => total + module.lessons.length,
+        0,
+      )
+
+      const completedLessons = await prisma.lessonProgress.count({
+        where: {
+          userId,
+          completed: true,
+          lesson: {
+            module: {
+              courseId,
+            },
+          },
+        },
+      })
+
+      const progressPercentage =
+        totalLessons === 0
+          ? 0
+          : Math.round((completedLessons / totalLessons) * 100)
+
+      return res.json({
+        success: true,
+        data: {
+          courseId: course.id,
+          courseTitle: course.title,
+          totalLessons,
+          completedLessons,
+          progressPercentage,
+        },
+      })
+    } catch (error) {
+      console.error('Failed to fetch course progress:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch course progress',
+      })
+    }
+  },
+)
 
 export default router

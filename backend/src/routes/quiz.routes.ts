@@ -165,130 +165,170 @@ router.post('/questions',authenticateToken,requireRole('EDUCATOR'),async (req: A
   }
 })
 
-router.get('/attempts/user/:userId',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user!.userId
+router.get(
+  '/attempts/user/:userId',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      // Always use the authenticated user's ID.
+      // Do not trust the userId from the URL.
+      const userId = req.user!.userId
 
-    if (Number.isNaN(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user ID',
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
       })
-    }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    })
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        })
+      }
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      })
-    }
-
-    const attempts = await prisma.quizAttempt.findMany({
-      where: {
-        userId,
-      },
-      orderBy: {
-        attemptedAt: 'desc',
-      },
-      include: {
-        quiz: {
-          select: {
-            id: true,
-            title: true,
-            lesson: {
-              select: {
-                id: true,
-                title: true,
+      const attempts = await prisma.quizAttempt.findMany({
+        where: {
+          userId,
+        },
+        orderBy: {
+          attemptedAt: 'desc',
+        },
+        include: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              lesson: {
+                select: {
+                  id: true,
+                  title: true,
+                },
               },
             },
           },
         },
-      },
-    })
+      })
 
-    res.json({
-      success: true,
-      data: attempts,
-    })
-  } catch (error) {
-    console.error('Failed to fetch quiz attempts:', error)
+      return res.json({
+        success: true,
+        data: attempts,
+      })
+    } catch (error) {
+      console.error('Failed to fetch quiz attempts:', error)
 
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch quiz attempts',
-    })
-  }
-})
-
-router.get('/:id', async (req, res) => {
-  try {
-    const quizId = Number(req.params.id)
-
-    if (Number.isNaN(quizId)) {
-      return res.status(400).json({
+      return res.status(500).json({
         success: false,
-        message: 'Invalid quiz ID',
+        message: 'Failed to fetch quiz attempts',
       })
     }
+  },
+)
 
-    const quiz = await prisma.quiz.findUnique({
-      where: {
-        id: quizId,
-      },
-      include: {
-        lesson: {
-          select: {
-            id: true,
-            title: true,
-          },
+router.get(
+  '/:id',
+  authenticateToken,
+  requireRole('STUDENT', 'EDUCATOR'),
+  async (req: AuthRequest, res) => {
+    try {
+      const quizId = Number(req.params.id)
+      const userId = req.user!.userId
+
+      if (!Number.isInteger(quizId) || quizId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid quiz ID',
+        })
+      }
+
+      const quiz = await prisma.quiz.findUnique({
+        where: {
+          id: quizId,
         },
-        questions: {
-          orderBy: {
-            id: 'asc',
-          },
-          select: {
-            id: true,
-            question: true,
-            options: {
-              orderBy: {
-                id: 'asc',
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              title: true,
+              module: {
+                select: {
+                  courseId: true,
+                  course: {
+                    select: {
+                      id: true,
+                      educatorId: true,
+                    },
+                  },
+                },
               },
-              select: {
-                id: true,
-                text: true,
+            },
+          },
+          questions: {
+            orderBy: {
+              id: 'asc',
+            },
+            include: {
+              options: {
+                select: {
+                  id: true,
+                  text: true,
+                },
               },
             },
           },
         },
-      },
-    })
+      })
 
-    if (!quiz) {
-      return res.status(404).json({
+      if (!quiz) {
+        return res.status(404).json({
+          success: false,
+          message: 'Quiz not found',
+        })
+      }
+
+      const courseId = quiz.lesson.module.courseId
+      const educatorId = quiz.lesson.module.course.educatorId
+
+      // Course educator can access their own quizzes.
+      if (educatorId === userId) {
+        return res.json({
+          success: true,
+          data: quiz,
+        })
+      }
+
+      // Students must be enrolled in the course.
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId,
+          },
+        },
+      })
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to access this quiz',
+        })
+      }
+
+      return res.json({
+        success: true,
+        data: quiz,
+      })
+    } catch (error) {
+      console.error('Failed to fetch quiz:', error)
+
+      return res.status(500).json({
         success: false,
-        message: 'Quiz not found',
+        message: 'Failed to fetch quiz',
       })
     }
-
-    res.json({
-      success: true,
-      data: quiz,
-    })
-  } catch (error) {
-    console.error('Failed to fetch quiz:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch quiz',
-    })
-  }
-})
+  },
+)
 
 router.post('/:id/submit',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
   try {
