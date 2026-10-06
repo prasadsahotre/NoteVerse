@@ -1,4 +1,6 @@
 import express from 'express'
+import cors from 'cors'
+
 import healthRoutes from './routes/health.routes.js'
 import courseRoutes from './routes/course.routes.js'
 import userRoutes from './routes/user.routes.js'
@@ -16,6 +18,15 @@ import adminRoutes from './routes/admin.routes.js'
 import reportRoutes from './routes/report.routes.js'
 
 const app = express()
+
+app.use(
+  cors({
+    origin: [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+    ],
+  }),
+)
 
 app.use(express.json())
 
