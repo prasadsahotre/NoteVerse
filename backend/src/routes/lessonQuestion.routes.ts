@@ -203,7 +203,6 @@ router.get('/lesson/:lessonId', async (req, res) => {
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },

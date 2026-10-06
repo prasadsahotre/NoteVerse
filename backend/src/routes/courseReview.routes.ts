@@ -199,37 +199,34 @@ router.patch('/:id',authenticateToken,requireRole('STUDENT'),async (req: AuthReq
     const { rating, review } = req.body
     const userId = req.user!.userId
 
-    if (Number.isNaN(reviewId)) {
+    if (!Number.isInteger(reviewId) || reviewId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid review ID',
       })
     }
 
-    if (!rating) {
-      return res.status(400).json({
-        success: false,
-        message: 'userId and rating are required',
-      })
-    }
-
-    const numericUserId = userId
     const numericRating = Number(rating)
 
     if (
-      Number.isNaN(numericUserId) ||
-      Number.isNaN(numericRating)
+      !Number.isInteger(numericRating) ||
+      numericRating < 1 ||
+      numericRating > 5
     ) {
       return res.status(400).json({
         success: false,
-        message: 'userId and rating must be valid numbers',
+        message: 'Rating must be an integer between 1 and 5',
       })
     }
 
-    if (numericRating < 1 || numericRating > 5) {
+    if (
+      review !== undefined &&
+      review !== null &&
+      typeof review !== 'string'
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Rating must be between 1 and 5',
+        message: 'Review must be a string',
       })
     }
 
@@ -246,7 +243,7 @@ router.patch('/:id',authenticateToken,requireRole('STUDENT'),async (req: AuthReq
       })
     }
 
-    if (existingReview.userId !== numericUserId) {
+    if (existingReview.userId !== userId) {
       return res.status(403).json({
         success: false,
         message: 'You can only update your own review',
