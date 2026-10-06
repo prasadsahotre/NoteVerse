@@ -74,7 +74,11 @@ router.post(
       const { lessonId } = req.body
       const userId = req.user!.userId
 
-      if (!lessonId) {
+      if (
+        lessonId === undefined ||
+        lessonId === null ||
+        lessonId === ''
+      ) {
         return res.status(400).json({
           success: false,
           message: 'lessonId is required',
