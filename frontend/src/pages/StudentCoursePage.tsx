@@ -155,12 +155,12 @@ function StudentCoursePage() {
                             </p>
                           </div>
 
-                          <button
-                            type="button"
-                            className="rounded-lg border border-indigo-500/40 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/10"
-                          >
-                            Start Lesson
-                          </button>
+                          <Link
+                                to={`/student/courses/${data.id}/lessons/${lesson.id}`}
+                                className="shrink-0 rounded-lg border border-indigo-500/40 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/10"
+                            >
+                                Start Lesson
+                            </Link>
                         </div>
                       ))
                     )}
