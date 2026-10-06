@@ -387,4 +387,116 @@ router.get('/analytics',authenticateToken,requireRole('ADMIN'),async (_req: Auth
   },
 )
 
+// Get reported content
+router.get('/reports',authenticateToken,requireRole('ADMIN'),async (_req: AuthRequest, res) => {
+    try {
+      const reports = await prisma.report.findMany({
+        orderBy: [
+          {
+            status: 'asc',
+          },
+          {
+            createdAt: 'desc',
+          },
+        ],
+        include: {
+          reporter: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          course: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          lesson: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
+      })
+
+      return res.json({
+        success: true,
+        data: reports,
+      })
+    } catch (error) {
+      console.error('Failed to fetch reports:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch reports',
+      })
+    }
+  },
+)
+
+// Resolve a report
+router.patch(
+  '/reports/:id',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: AuthRequest, res) => {
+    try {
+      const reportId = Number(req.params.id)
+
+      if (!Number.isInteger(reportId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid report ID',
+        })
+      }
+
+      const report = await prisma.report.findUnique({
+        where: {
+          id: reportId,
+        },
+      })
+
+      if (!report) {
+        return res.status(404).json({
+          success: false,
+          message: 'Report not found',
+        })
+      }
+
+      if (report.status === 'RESOLVED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Report is already resolved',
+        })
+      }
+
+      const updatedReport = await prisma.report.update({
+        where: {
+          id: reportId,
+        },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+        },
+      })
+
+      return res.json({
+        success: true,
+        message: 'Report resolved successfully',
+        data: updatedReport,
+      })
+    } catch (error) {
+      console.error('Resolve report error:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to resolve report',
+      })
+    }
+  },
+)
+
 export default router

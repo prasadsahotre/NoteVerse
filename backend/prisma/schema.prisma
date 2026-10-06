@@ -24,7 +24,8 @@ model User {
   quizAttempts    QuizAttempt[]
   lessonQuestions LessonQuestion[]
   courseReviews   CourseReview[]
-  certificates Certificate[]
+  certificates    Certificate[]
+  reports         Report[]
 }
 
 model Role {
@@ -55,11 +56,12 @@ model Course {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  educator    User           @relation(fields: [educatorId], references: [id])
-  modules     Module[]
-  enrollments Enrollment[]
-  reviews     CourseReview[]
+  educator     User           @relation(fields: [educatorId], references: [id])
+  modules      Module[]
+  enrollments  Enrollment[]
+  reviews      CourseReview[]
   certificates Certificate[]
+  reports      Report[]
 }
 
 enum CourseStatus {
@@ -93,6 +95,7 @@ model Lesson {
   quizzes   Quiz[]
   questions LessonQuestion[]
   resources LessonResource[]
+  reports   Report[]
 }
 
 model Enrollment {
@@ -229,4 +232,30 @@ model Certificate {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+model Report {
+  id          Int          @id @default(autoincrement())
+  reason      String
+  description String?
+  status      ReportStatus @default(PENDING)
+  reporterId  Int
+  courseId    Int?
+  lessonId    Int?
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+
+  reporter User    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson   Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
 }
