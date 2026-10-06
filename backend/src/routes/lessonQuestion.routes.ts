@@ -10,65 +10,85 @@ const router = Router()
 
 // Ask a question about a lesson
 router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const { lessonId, question } = req.body
-    const userId = req.user!.userId
+    try {
+      const { lessonId, question } = req.body
+      const userId = req.user!.userId
 
-    if (!lessonId || !question) {
-      return res.status(400).json({
+      const parsedLessonId = Number(lessonId)
+
+      if (!Number.isInteger(parsedLessonId) || parsedLessonId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lesson ID',
+        })
+      }
+
+      if (typeof question !== 'string' || !question.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Question is required',
+        })
+      }
+
+      const lesson = await prisma.lesson.findUnique({
+        where: {
+          id: parsedLessonId,
+        },
+        include: {
+          module: {
+            select: {
+              courseId: true,
+            },
+          },
+        },
+      })
+
+      if (!lesson) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lesson not found',
+        })
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: lesson.module.courseId,
+          },
+        },
+      })
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to ask a question',
+        })
+      }
+
+      const lessonQuestion = await prisma.lessonQuestion.create({
+        data: {
+          userId,
+          lessonId: parsedLessonId,
+          question: question.trim(),
+        },
+      })
+
+      return res.status(201).json({
+        success: true,
+        message: 'Question asked successfully',
+        data: lessonQuestion,
+      })
+    } catch (error) {
+      console.error('Failed to create lesson question:', error)
+
+      return res.status(500).json({
         success: false,
-        message: 'lessonId and question are required',
+        message: 'Failed to ask question',
       })
     }
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-    })
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      })
-    }
-
-    const lesson = await prisma.lesson.findUnique({
-      where: {
-        id: Number(lessonId),
-      },
-    })
-
-    if (!lesson) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lesson not found',
-      })
-    }
-
-    const lessonQuestion = await prisma.lessonQuestion.create({
-      data: {
-        userId: userId,
-        lessonId: Number(lessonId),
-        question: question.trim(),
-      },
-    })
-
-    res.status(201).json({
-      success: true,
-      message: 'Question asked successfully',
-      data: lessonQuestion,
-    })
-  } catch (error) {
-    console.error('Failed to create lesson question:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to ask question',
-    })
-  }
-})
+  },
+)
 
 // Answer a lesson question
 router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {

@@ -9,105 +9,119 @@ import { requireRole } from '../middleware/role.middleware.js'
 const router = Router()
 
 // Create a course review
-router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest, res) => {
-  try {
-    const { courseId, rating, review } = req.body
-    const userId = req.user!.userId
+router.post(
+  '/',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      const { courseId, rating, review } = req.body
+      const userId = req.user!.userId
 
-    if (!courseId || !rating) {
-      return res.status(400).json({
-        success: false,
-        message: 'courseId and rating are required',
-      })
-    }
+      const numericCourseId = Number(courseId)
+      const numericRating = Number(rating)
 
-    const numericUserId = userId
-    const numericCourseId = Number(courseId)
-    const numericRating = Number(rating)
+      if (
+        !Number.isInteger(numericCourseId) ||
+        numericCourseId < 1
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
 
-    if (
-      Number.isNaN(numericUserId) ||
-      Number.isNaN(numericCourseId) ||
-      Number.isNaN(numericRating)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: 'userId, courseId and rating must be valid numbers',
-      })
-    }
+      if (
+        !Number.isInteger(numericRating) ||
+        numericRating < 1 ||
+        numericRating > 5
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Rating must be an integer between 1 and 5',
+        })
+      }
 
-    if (numericRating < 1 || numericRating > 5) {
-      return res.status(400).json({
-        success: false,
-        message: 'Rating must be between 1 and 5',
-      })
-    }
+      if (
+        review !== undefined &&
+        review !== null &&
+        typeof review !== 'string'
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Review must be a string',
+        })
+      }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: numericUserId,
-      },
-    })
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      })
-    }
-
-    const course = await prisma.course.findUnique({
-      where: {
-        id: numericCourseId,
-      },
-    })
-
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found',
-      })
-    }
-
-    const existingReview = await prisma.courseReview.findUnique({
-      where: {
-        userId_courseId: {
-          userId: numericUserId,
-          courseId: numericCourseId,
+      const course = await prisma.course.findUnique({
+        where: {
+          id: numericCourseId,
         },
-      },
-    })
+      })
 
-    if (existingReview) {
-      return res.status(409).json({
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: numericCourseId,
+          },
+        },
+      })
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to leave a review',
+        })
+      }
+
+      const existingReview = await prisma.courseReview.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: numericCourseId,
+          },
+        },
+      })
+
+      if (existingReview) {
+        return res.status(409).json({
+          success: false,
+          message: 'You have already reviewed this course',
+        })
+      }
+
+      const courseReview = await prisma.courseReview.create({
+        data: {
+          userId,
+          courseId: numericCourseId,
+          rating: numericRating,
+          review: review?.trim() || null,
+        },
+      })
+
+      return res.status(201).json({
+        success: true,
+        message: 'Course review created successfully',
+        data: courseReview,
+      })
+    } catch (error) {
+      console.error('Failed to create course review:', error)
+
+      return res.status(500).json({
         success: false,
-        message: 'You have already reviewed this course',
+        message: 'Failed to create course review',
       })
     }
-
-    const courseReview = await prisma.courseReview.create({
-      data: {
-        userId: numericUserId,
-        courseId: numericCourseId,
-        rating: numericRating,
-        review: review?.trim() || null,
-      },
-    })
-
-    res.status(201).json({
-      success: true,
-      message: 'Course review created successfully',
-      data: courseReview,
-    })
-  } catch (error) {
-    console.error('Failed to create course review:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create course review',
-    })
-  }
-})
+  },
+)
 
 // Get all reviews for a course
 router.get('/course/:courseId', async (req, res) => {
