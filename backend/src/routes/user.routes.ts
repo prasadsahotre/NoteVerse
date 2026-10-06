@@ -10,16 +10,40 @@ router.post('/', async (req, res) => {
   try {
     const { name, email, password, role } = req.body
 
-    if (!name || !email || !password || !role) {
+    if (
+      typeof name !== 'string' ||
+      !name.trim() ||
+      typeof email !== 'string' ||
+      !email.trim() ||
+      typeof password !== 'string' ||
+      !password ||
+      typeof role !== 'string' ||
+      !role.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Name, email, password and role are required',
       })
     }
 
-    const normalizedEmail = email.toLowerCase().trim()
+    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedRole = role.trim().toUpperCase()
 
-    const normalizedRole = role.toUpperCase()
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+      })
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      })
+    }
 
     if (!['STUDENT', 'EDUCATOR'].includes(normalizedRole)) {
       return res.status(400).json({
@@ -96,7 +120,12 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
 
-    if (!email || !password) {
+    if (
+      typeof email !== 'string' ||
+      !email.trim() ||
+      typeof password !== 'string' ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Email and password are required',
@@ -104,6 +133,15 @@ router.post('/login', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address',
+      })
+    }
 
     const user = await prisma.user.findUnique({
       where: {
