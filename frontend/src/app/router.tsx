@@ -5,6 +5,7 @@ import StudentDashboard from '../pages/StudentDashboard'
 import EducatorDashboard from '../pages/EducatorDashboard'
 import AdminDashboard from '../pages/AdminDashboard'
 import ProtectedRoute from '../components/ProtectedRoute'
+import StudentCoursePage from '../pages/StudentCoursePage'
 
 export const router = createBrowserRouter([
   {
@@ -39,4 +40,13 @@ export const router = createBrowserRouter([
     path: '*',
     element: <NotFoundPage />,
   },
+
+  {
+  path: '/student/courses/:courseId',
+  element: (
+    <ProtectedRoute allowedRoles={['STUDENT']}>
+      <StudentCoursePage />
+    </ProtectedRoute>
+  ),
+},
 ])

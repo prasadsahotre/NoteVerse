@@ -1,4 +1,5 @@
 import { useQueries } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { apiRequest } from '../api/client'
 import type {
@@ -217,6 +218,7 @@ function StudentDashboard() {
                       key={enrollment.id}
                       className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-indigo-400/30"
                     >
+                      {/* Course Header */}
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="text-xs uppercase tracking-wider text-indigo-400">
@@ -233,18 +235,19 @@ function StudentDashboard() {
                         </span>
                       </div>
 
+                      {/* Description */}
                       <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-400">
                         {enrollment.course.description}
                       </p>
 
                       {/* Progress */}
                       <div className="mt-6">
-                        <div className="mb-2 flex items-center justify-between text-sm">
-                          <span className="text-slate-400">
+                        <div className="mb-2 flex justify-between">
+                          <span className="text-sm text-slate-400">
                             Progress
                           </span>
 
-                          <span className="font-medium text-white">
+                          <span className="text-sm font-semibold text-white">
                             {progress
                               ? `${progress.progressPercentage}%`
                               : '...'}
@@ -253,23 +256,29 @@ function StudentDashboard() {
 
                         <div className="h-2 overflow-hidden rounded-full bg-slate-800">
                           <div
-                            className="h-full rounded-full bg-indigo-500 transition-all"
+                            className="h-full rounded-full bg-indigo-500 transition-all duration-500"
                             style={{
-                              width: `${progress?.progressPercentage ?? 0}%`,
+                              width: `${
+                                progress?.progressPercentage ?? 0
+                              }%`,
                             }}
                           />
                         </div>
 
-                        <p className="mt-2 text-xs text-slate-500">
+                        <p className="mt-3 text-sm text-slate-500">
                           {progress
                             ? `${progress.completedLessons} of ${progress.totalLessons} lessons completed`
                             : 'Loading progress...'}
                         </p>
-                      </div>
 
-                      <button className="mt-6 w-full rounded-lg bg-indigo-500 px-4 py-3 text-sm font-medium hover:bg-indigo-400">
-                        Continue Learning
-                      </button>
+                        {/* Continue Learning */}
+                        <Link
+                          to={`/student/courses/${enrollment.courseId}`}
+                          className="mt-5 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                        >
+                          Continue Learning
+                        </Link>
+                      </div>
                     </div>
                   )
                 })}
