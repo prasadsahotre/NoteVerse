@@ -150,7 +150,7 @@ router.get('/educator/:educatorId', async (req, res) => {
   try {
     const educatorId = Number(req.params.educatorId)
 
-    if (Number.isNaN(educatorId)) {
+    if (!Number.isInteger(educatorId) || educatorId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid educator ID',
@@ -216,7 +216,7 @@ router.get('/:id', async (req, res) => {
   try {
     const courseId = Number(req.params.id)
 
-    if (Number.isNaN(courseId)) {
+    if (!Number.isInteger(courseId) || courseId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid course ID',
@@ -273,10 +273,21 @@ router.post(
     try {
       const { title, description } = req.body
 
-      if (!title) {
+      if (typeof title !== 'string' || !title.trim()) {
         return res.status(400).json({
           success: false,
           message: 'Title is required',
+        })
+      }
+
+      if (
+        description !== undefined &&
+        description !== null &&
+        typeof description !== 'string'
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Description must be a string',
         })
       }
 
@@ -297,8 +308,9 @@ router.post(
 
       const course = await prisma.course.create({
         data: {
-          title,
-          description,
+          title: title.trim(),
+          description:
+            typeof description === 'string' ? description.trim() : description,
           educatorId: Number(educatorId),
         },
       })
@@ -328,10 +340,28 @@ router.patch(
       const courseId = Number(req.params.id)
       const { title, description } = req.body
 
-      if (Number.isNaN(courseId)) {
+      if (!Number.isInteger(courseId) || courseId < 1) {
         return res.status(400).json({
           success: false,
           message: 'Invalid course ID',
+        })
+      }
+
+      if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Title must be a non-empty string',
+        })
+      }
+
+      if (
+        description !== undefined &&
+        description !== null &&
+        typeof description !== 'string'
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Description must be a string',
         })
       }
 
@@ -369,8 +399,13 @@ router.patch(
           id: courseId,
         },
         data: {
-          ...(title && { title }),
-          ...(description !== undefined && { description }),
+          ...(title !== undefined && { title: title.trim() }),
+          ...(description !== undefined && {
+            description:
+              typeof description === 'string'
+                ? description.trim()
+                : description,
+          }),
         },
       })
 
@@ -398,7 +433,7 @@ router.patch(
     try {
       const courseId = Number(req.params.id)
 
-      if (Number.isNaN(courseId)) {
+      if (!Number.isInteger(courseId) || courseId < 1) {
         return res.status(400).json({
           success: false,
           message: 'Invalid course ID',
@@ -467,7 +502,7 @@ router.delete(
     try {
       const courseId = Number(req.params.id)
 
-      if (Number.isNaN(courseId)) {
+      if (!Number.isInteger(courseId) || courseId < 1) {
         return res.status(400).json({
           success: false,
           message: 'Invalid course ID',
