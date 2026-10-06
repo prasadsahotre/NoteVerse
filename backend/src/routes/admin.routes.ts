@@ -304,4 +304,87 @@ router.patch('/courses/:id/status',authenticateToken,requireRole('ADMIN'),async 
   },
 )
 
+router.get('/analytics',authenticateToken,requireRole('ADMIN'),async (_req: AuthRequest, res) => {
+    try {
+      const [
+        totalUsers,
+        totalStudents,
+        totalEducators,
+        totalAdmins,
+        totalCourses,
+        publishedCourses,
+        draftCourses,
+        totalEnrollments,
+        totalCertificates,
+      ] = await Promise.all([
+        prisma.user.count(),
+
+        prisma.userRole.count({
+          where: {
+            role: {
+              name: 'STUDENT',
+            },
+          },
+        }),
+
+        prisma.userRole.count({
+          where: {
+            role: {
+              name: 'EDUCATOR',
+            },
+          },
+        }),
+
+        prisma.userRole.count({
+          where: {
+            role: {
+              name: 'ADMIN',
+            },
+          },
+        }),
+
+        prisma.course.count(),
+
+        prisma.course.count({
+          where: {
+            status: 'PUBLISHED',
+          },
+        }),
+
+        prisma.course.count({
+          where: {
+            status: 'DRAFT',
+          },
+        }),
+
+        prisma.enrollment.count(),
+
+        prisma.certificate.count(),
+      ])
+
+      return res.json({
+        success: true,
+        data: {
+          totalUsers,
+          totalStudents,
+          totalEducators,
+          totalAdmins,
+          totalCourses,
+          publishedCourses,
+          draftCourses,
+          totalEnrollments,
+          totalCertificates,
+        },
+      })
+    } catch (error) {
+      console.error('Admin analytics error:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch platform analytics',
+      })
+    }
+  },
+)
+
 export default router
