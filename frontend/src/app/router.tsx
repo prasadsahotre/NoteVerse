@@ -1,5 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
-import HomePage from '../pages/HomePage'
+import HomeRoute from '../components/HomeRoute'
 import NotFoundPage from '../pages/NotFoundPage'
 import StudentDashboard from '../pages/StudentDashboard'
 import EducatorDashboard from '../pages/EducatorDashboard'
@@ -12,7 +12,7 @@ import StudentQuizPage from '../pages/StudentQuizPage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <HomePage />,
+    element: <HomeRoute />,
   },
   {
     path: '/student',

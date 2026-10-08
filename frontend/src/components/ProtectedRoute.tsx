@@ -11,8 +11,9 @@ function ProtectedRoute({
   children,
   allowedRoles,
 }: ProtectedRouteProps) {
-  const { user, isLoading, isAuthenticated } = useAuth()
+  const { user, isLoading } = useAuth()
 
+  // Wait until authentication state has been loaded.
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -21,10 +22,12 @@ function ProtectedRoute({
     )
   }
 
-  if (!isAuthenticated || !user) {
+  // User is not logged in.
+  if (!user) {
     return <Navigate to="/" replace />
   }
 
+  // User is logged in but does not have the required role.
   if (
     allowedRoles &&
     !user.roles.some((role) => allowedRoles.includes(role))
@@ -32,6 +35,7 @@ function ProtectedRoute({
     return <Navigate to="/" replace />
   }
 
+  // User is authenticated and has the required role.
   return <>{children}</>
 }
 

@@ -135,7 +135,15 @@ function HomePage() {
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
-                <button className="rounded-lg bg-indigo-500 px-6 py-3 font-medium hover:bg-indigo-400">
+                <button
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      setLoginError('')
+                      setShowLogin(true)
+                    }
+                  }}
+                  className="rounded-lg bg-indigo-500 px-6 py-3 font-medium hover:bg-indigo-400"
+                >
                   Browse Courses
                 </button>
 
