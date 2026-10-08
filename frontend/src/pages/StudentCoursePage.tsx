@@ -26,7 +26,21 @@ interface Course {
 
 interface CourseResponse {
   success: boolean
-  data: Course
+  data: {
+    enrollment: {
+      id: number
+      userId: number
+      courseId: number
+      createdAt: string
+    }
+    course: Course
+    progress: {
+      totalLessons: number
+      completedLessons: number
+      progressPercentage: number
+    }
+    modules: Module[]
+  }
 }
 
 function StudentCoursePage() {
@@ -133,11 +147,11 @@ function StudentCoursePage() {
           </p>
 
           <h1 className="mt-2 text-3xl font-bold">
-            {data.title}
+            {data.course.title}
           </h1>
 
           <p className="mt-4 text-slate-400">
-            {data.description}
+            {data.course.description}
           </p>
         </div>
 
