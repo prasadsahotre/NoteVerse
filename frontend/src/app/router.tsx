@@ -7,6 +7,7 @@ import AdminDashboard from '../pages/AdminDashboard'
 import ProtectedRoute from '../components/ProtectedRoute'
 import StudentCoursePage from '../pages/StudentCoursePage'
 import StudentLessonPage from '../pages/StudentLessonPage'
+import StudentQuizPage from '../pages/StudentQuizPage'
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +35,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={['STUDENT']}>
         <StudentLessonPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/student/quizzes/:quizId',
+    element: (
+      <ProtectedRoute allowedRoles={['STUDENT']}>
+        <StudentQuizPage />
       </ProtectedRoute>
     ),
   },

@@ -2,15 +2,27 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from 'react-router-dom'
+
 import { useAuth } from '../auth/AuthContext'
 import { apiRequest } from '../api/client'
+
+interface Quiz {
+  id: number
+  title: string
+}
 
 interface Lesson {
   id: number
   title: string
   content: string | null
   position: number
+  quizzes: Quiz[]
 }
 
 interface Module {
@@ -25,12 +37,25 @@ interface Course {
   title: string
   description: string
   status: string
-  modules: Module[]
 }
 
 interface CourseResponse {
   success: boolean
-  data: Course
+  data: {
+    enrollment: {
+      id: number
+      userId: number
+      courseId: number
+      createdAt: string
+    }
+    course: Course
+    progress: {
+      totalLessons: number
+      completedLessons: number
+      progressPercentage: number
+    }
+    modules: Module[]
+  }
 }
 
 interface ProgressResponse {
@@ -88,6 +113,7 @@ function StudentLessonPage() {
       user?.id,
       courseIdNumber,
     ],
+
     queryFn: async () => {
       if (!user) {
         throw new Error('User is not authenticated')
@@ -99,6 +125,7 @@ function StudentLessonPage() {
 
       return response.data
     },
+
     enabled:
       Boolean(user) &&
       hasValidCourseId &&
@@ -107,6 +134,7 @@ function StudentLessonPage() {
 
   const resourcesQuery = useQuery({
     queryKey: ['lesson-resources', lessonIdNumber],
+
     queryFn: async () => {
       const response =
         await apiRequest<ResourcesResponse>(
@@ -115,19 +143,38 @@ function StudentLessonPage() {
 
       return response.data
     },
+
     enabled:
       hasValidLessonId &&
       hasValidCourseId,
   })
 
-  const course = courseQuery.data
+  /*
+   * The API response structure is:
+   *
+   * data
+   * ├── enrollment
+   * ├── course
+   * ├── progress
+   * └── modules
+   *
+   * Therefore:
+   * - course = courseQuery.data.course
+   * - modules = courseQuery.data.modules
+   */
+  const courseData = courseQuery.data
 
-  const lesson = course?.modules
+  const course = courseData?.course
+  const modules = courseData?.modules ?? []
+
+  const lesson = modules
     .flatMap((module) => module.lessons)
     .find((item) => item.id === lessonIdNumber)
 
-  const lessonModule = course?.modules.find((module) =>
-    module.lessons.some((item) => item.id === lessonIdNumber),
+  const lessonModule = modules.find((module) =>
+    module.lessons.some(
+      (item) => item.id === lessonIdNumber,
+    ),
   )
 
   const completeLessonMutation = useMutation({
@@ -138,12 +185,14 @@ function StudentLessonPage() {
 
       return apiRequest<ProgressResponse>('/progress', {
         method: 'POST',
+
         body: JSON.stringify({
           userId: user.id,
           lessonId: lessonIdNumber,
         }),
       })
     },
+
     onSuccess: () => {
       navigate(`/student/courses/${courseIdNumber}`)
     },
@@ -158,6 +207,7 @@ function StudentLessonPage() {
 
       return response.data
     },
+
     onSuccess: (resource) => {
       window.open(
         resource.downloadUrl,
@@ -277,7 +327,9 @@ function StudentLessonPage() {
         {/* Breadcrumb */}
         <div className="text-sm text-slate-500">
           {course.title}
+
           <span className="mx-2">/</span>
+
           {lessonModule.title}
         </div>
 
@@ -398,6 +450,52 @@ function StudentLessonPage() {
           </div>
         </section>
 
+        {/* Quiz */}
+        {lesson.quizzes.length > 0 && (
+          <section className="mt-8">
+            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6">
+              <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">
+                Knowledge Check
+              </p>
+
+              <h2 className="mt-2 text-2xl font-bold">
+                Test Your Knowledge
+              </h2>
+
+              <p className="mt-2 text-slate-400">
+                Complete the quiz associated with this lesson to
+                test your understanding.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {lesson.quizzes.map((quiz) => (
+                  <div
+                    key={quiz.id}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {quiz.title}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Quiz
+                      </p>
+                    </div>
+
+                    <Link
+                      to={`/student/quizzes/${quiz.id}`}
+                      className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+                    >
+                      Take Quiz
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Completion */}
         <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -428,7 +526,8 @@ function StudentLessonPage() {
         {/* Completion Error */}
         {completeLessonMutation.isError && (
           <div className="mt-4 rounded-lg border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">
-            {completeLessonMutation.error instanceof Error
+            {completeLessonMutation.error instanceof
+            Error
               ? completeLessonMutation.error.message
               : 'Failed to mark lesson as complete.'}
           </div>
