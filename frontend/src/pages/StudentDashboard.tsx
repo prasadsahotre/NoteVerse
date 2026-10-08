@@ -272,12 +272,19 @@ function StudentDashboard() {
                         </p>
 
                         {/* Continue Learning */}
-                        <Link
-                          to={`/student/courses/${enrollment.courseId}`}
-                          className="mt-5 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                        >
+                        {Number.isInteger(enrollment.courseId) &&
+                        enrollment.courseId > 0 ? (
+                          <Link
+                            to={`/student/courses/${enrollment.courseId}`}
+                            className="mt-5 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                          >
                           Continue Learning
-                        </Link>
+                          </Link>
+                        ) : (
+                        <p className="mt-5 text-sm text-red-300">
+                          Invalid course information.
+                        </p>
+                      )}
                       </div>
                     </div>
                   )

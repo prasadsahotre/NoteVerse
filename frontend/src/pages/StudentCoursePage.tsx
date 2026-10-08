@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
@@ -18,7 +18,6 @@ interface Module {
 }
 
 interface Course {
-  id: number
   title: string
   description: string
   status: string
@@ -33,6 +32,7 @@ interface CourseResponse {
 function StudentCoursePage() {
   const { courseId } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const courseIdNumber = Number(courseId)
 
@@ -49,13 +49,18 @@ function StudentCoursePage() {
 
       return response.data
     },
-    enabled: Boolean(user) && courseIdNumber > 0,
+    enabled:
+      Boolean(user) &&
+      Number.isInteger(courseIdNumber) &&
+      courseIdNumber > 0,
   })
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <p className="text-slate-400">Loading course...</p>
+        <p className="text-slate-400">
+          Loading course...
+        </p>
       </div>
     )
   }
@@ -64,7 +69,10 @@ function StudentCoursePage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Unable to load course</h1>
+          <h1 className="text-2xl font-bold">
+            Unable to load course
+          </h1>
+
           <p className="mt-2 text-slate-400">
             {error instanceof Error
               ? error.message
@@ -86,11 +94,25 @@ function StudentCoursePage() {
     return null
   }
 
+  const handleStartLesson = (lessonId: number) => {
+    if (!Number.isInteger(lessonId) || lessonId <= 0) {
+      return
+    }
+
+    navigate(
+      `/student/courses/${courseIdNumber}/lessons/${lessonId}`,
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/student" className="text-xl font-bold">
+          <Link
+            to="/student"
+            className="text-xl font-bold"
+          >
             Note<span className="text-indigo-400">Verse</span>
           </Link>
 
@@ -104,20 +126,26 @@ function StudentCoursePage() {
       </nav>
 
       <main className="mx-auto max-w-5xl px-6 py-10">
+        {/* Course Header */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8">
           <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">
             Course
           </p>
 
-          <h1 className="mt-2 text-3xl font-bold">{data.title}</h1>
+          <h1 className="mt-2 text-3xl font-bold">
+            {data.title}
+          </h1>
 
           <p className="mt-4 text-slate-400">
             {data.description}
           </p>
         </div>
 
+        {/* Course Content */}
         <section className="mt-8">
-          <h2 className="text-2xl font-bold">Course Content</h2>
+          <h2 className="text-2xl font-bold">
+            Course Content
+          </h2>
 
           <div className="mt-5 space-y-5">
             {data.modules.length === 0 ? (
@@ -130,12 +158,14 @@ function StudentCoursePage() {
                   key={module.id}
                   className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
                 >
+                  {/* Module Header */}
                   <div className="border-b border-slate-800 px-6 py-4">
                     <h3 className="text-lg font-semibold">
                       Module {module.position}: {module.title}
                     </h3>
                   </div>
 
+                  {/* Lessons */}
                   <div className="divide-y divide-slate-800">
                     {module.lessons.length === 0 ? (
                       <p className="px-6 py-4 text-sm text-slate-500">
@@ -148,19 +178,31 @@ function StudentCoursePage() {
                           className="flex items-center justify-between px-6 py-4"
                         >
                           <div>
-                            <p className="font-medium">{lesson.title}</p>
+                            <p className="font-medium">
+                              {lesson.title}
+                            </p>
 
                             <p className="mt-1 text-sm text-slate-500">
                               Lesson {lesson.position}
                             </p>
                           </div>
 
-                          <Link
-                                to={`/student/courses/${data.id}/lessons/${lesson.id}`}
-                                className="shrink-0 rounded-lg border border-indigo-500/40 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/10"
+                          {Number.isInteger(lesson.id) &&
+                          lesson.id > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStartLesson(lesson.id)
+                              }
+                              className="shrink-0 rounded-lg border border-indigo-500/40 px-4 py-2 text-sm font-medium text-indigo-300 hover:bg-indigo-500/10"
                             >
-                                Start Lesson
-                            </Link>
+                              Start Lesson
+                            </button>
+                          ) : (
+                            <span className="text-sm text-red-300">
+                              Invalid lesson
+                            </span>
+                          )}
                         </div>
                       ))
                     )}
