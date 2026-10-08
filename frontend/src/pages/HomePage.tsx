@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useAuth } from '../auth/AuthContext'
+
+import { useAuth } from '../auth/useAuth'
 
 function HomePage() {
   const { user, isAuthenticated, login, logout } = useAuth()
@@ -19,9 +20,15 @@ function HomePage() {
 
     try {
       await login(email, password)
+
       setShowLogin(false)
       setEmail('')
       setPassword('')
+
+      // Navigate using the browser after authentication succeeds.
+      // This ensures the new authenticated state is loaded
+      // before ProtectedRoute checks the student route.
+      window.location.replace('/student')
     } catch (error) {
       setLoginError(
         error instanceof Error

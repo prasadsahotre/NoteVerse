@@ -12,12 +12,10 @@ import {
   setToken,
 } from './authStorage'
 
-export interface User {
-  id: number
-  name: string
-  email: string
-  roles: string[]
-}
+import {
+  AuthContext,
+  type User,
+} from './auth-context'
 
 interface LoginResponse {
   success: boolean
@@ -33,37 +31,30 @@ interface MeResponse {
   data: User
 }
 
-interface AuthContextValue {
-  user: User | null
-  isLoading: boolean
-  isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(
-  undefined,
-)
-
 export function AuthProvider({
   children,
 }: {
   children: ReactNode
 }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+
+  const [isLoading, setIsLoading] = useState(() =>
+    Boolean(getToken()),
+  )
 
   useEffect(() => {
     const token = getToken()
 
     if (!token) {
-      setIsLoading(false)
       return
     }
 
     const loadCurrentUser = async () => {
       try {
-        const response = await apiRequest<MeResponse>('/users/me')
+        const response = await apiRequest<MeResponse>(
+          '/users/me',
+        )
+
         setUser(response.data)
       } catch {
         removeToken()
@@ -110,16 +101,4 @@ export function AuthProvider({
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext)
-
-  if (!context) {
-    throw new Error(
-      'useAuth must be used inside an AuthProvider',
-    )
-  }
-
-  return context
 }

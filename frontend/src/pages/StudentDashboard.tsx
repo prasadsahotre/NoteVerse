@@ -1,6 +1,6 @@
 import { useQueries } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
 import type {
   CourseProgress,

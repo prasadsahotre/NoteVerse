@@ -9,7 +9,7 @@ import {
   useParams,
 } from 'react-router-dom'
 
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
 
 interface Quiz {
