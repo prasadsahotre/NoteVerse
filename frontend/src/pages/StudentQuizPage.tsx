@@ -176,6 +176,7 @@ function StudentQuizPage() {
   ).length
 
   const allQuestionsAnswered =
+    quiz.questions.length > 0 &&
     answeredCount === quiz.questions.length
 
   return (
@@ -255,7 +256,11 @@ function StudentQuizPage() {
         {/* Questions */}
         {!submitted && (
           <section className="mt-8 space-y-6">
-            {quiz.questions.map((question, index) => (
+            {quiz.questions.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-300">
+                This quiz does not have any questions yet, so it cannot be submitted.
+              </div>
+            ) : quiz.questions.map((question, index) => (
               <div
                 key={question.id}
                 className="rounded-2xl border border-slate-800 bg-slate-900 p-6"
@@ -308,7 +313,7 @@ function StudentQuizPage() {
             ))}
 
             {/* Submit Error */}
-            {submitMutation.isError && (
+            {quiz.questions.length > 0 && submitMutation.isError && (
               <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-red-300">
                 {submitMutation.error instanceof Error
                   ? submitMutation.error.message
@@ -317,7 +322,7 @@ function StudentQuizPage() {
             )}
 
             {/* Submit Button */}
-            <div className="flex flex-col items-end gap-3">
+            {quiz.questions.length > 0 && <div className="flex flex-col items-end gap-3">
               {!allQuestionsAnswered && (
                 <p className="text-sm text-slate-500">
                   Answer all questions before submitting.
@@ -337,7 +342,7 @@ function StudentQuizPage() {
                   ? 'Submitting...'
                   : 'Submit Quiz'}
               </button>
-            </div>
+            </div>}
           </section>
         )}
       </main>

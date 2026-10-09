@@ -8,6 +8,7 @@ interface Lesson {
   title: string
   content: string | null
   position: number
+  completed: boolean
 }
 
 interface Module {
@@ -153,6 +154,28 @@ function StudentCoursePage() {
           <p className="mt-4 text-slate-400">
             {data.course.description}
           </p>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-300">Course Progress</span>
+              <span className="text-slate-400">
+                {data.progress.completedLessons} of {data.progress.totalLessons} lessons completed ({data.progress.progressPercentage}%)
+              </span>
+            </div>
+            <div
+              className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800"
+              role="progressbar"
+              aria-label="Course progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={data.progress.progressPercentage}
+            >
+              <div
+                className="h-full rounded-full bg-indigo-500"
+                style={{ width: `${data.progress.progressPercentage}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Course Content */}
@@ -198,6 +221,9 @@ function StudentCoursePage() {
 
                             <p className="mt-1 text-sm text-slate-500">
                               Lesson {lesson.position}
+                            </p>
+                            <p className={`mt-1 text-sm ${lesson.completed ? 'text-green-400' : 'text-slate-500'}`}>
+                              {lesson.completed ? 'Completed' : 'Not completed'}
                             </p>
                           </div>
 
