@@ -1,25 +1,65 @@
 import { useState } from 'react'
+
 import type { FormEvent } from 'react'
 
 import { useAuth } from '../auth/useAuth'
+import type { RegistrationRole, User } from '../auth/auth-context'
+
+type AuthModalMode = 'login' | 'choose-role' | 'signup'
+
+function getPasswordFeedback(password: string) {
+  const suggestions = [
+    ...(password.length < 8 ? ['Use at least 8 characters.'] : []),
+    ...(!/[a-z]/.test(password) ? ['Add a lowercase letter.'] : []),
+    ...(!/[A-Z]/.test(password) ? ['Add an uppercase letter.'] : []),
+    ...(!/\d/.test(password) ? ['Add a number.'] : []),
+    ...(!/[^A-Za-z0-9]/.test(password) ? ['Add a symbol.'] : []),
+  ]
+
+  const score = 5 - suggestions.length
+  return {
+    label: score <= 2 ? 'Needs work' : score <= 3 ? 'Getting stronger' : 'Strong',
+    suggestions,
+  }
+}
 
 function HomePage() {
-  const { user, isAuthenticated, login, logout } = useAuth()
+  const { user, isAuthenticated, login, register, logout } = useAuth()
 
   const [showLogin, setShowLogin] = useState(false)
+  const [modalMode, setModalMode] = useState<AuthModalMode>('login')
+  const [registrationRole, setRegistrationRole] = useState<RegistrationRole>('STUDENT')
+  const [name, setName] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+
   const [email, setEmail] = useState('')
+
   const [password, setPassword] = useState('')
+
   const [loginError, setLoginError] = useState('')
+
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
-  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+  const navigateForUser = (authenticatedUser: User) => {
+    if (authenticatedUser.roles.includes('STUDENT')) {
+      window.location.replace('/student')
+    } else if (authenticatedUser.roles.includes('ADMIN')) {
+      window.location.replace('/admin')
+    } else {
+      window.location.replace('/educator')
+    }
+  }
+
+  const handleLogin = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault()
 
     setLoginError('')
     setIsLoggingIn(true)
 
     try {
-      await login(email, password)
+      const authenticatedUser = await login(email, password)
 
       setShowLogin(false)
       setEmail('')
@@ -28,7 +68,7 @@ function HomePage() {
       // Navigate using the browser after authentication succeeds.
       // This ensures the new authenticated state is loaded
       // before ProtectedRoute checks the student route.
-      window.location.replace('/student')
+      navigateForUser(authenticatedUser)
     } catch (error) {
       setLoginError(
         error instanceof Error
@@ -38,6 +78,50 @@ function HomePage() {
     } finally {
       setIsLoggingIn(false)
     }
+  }
+
+  const handleRegistration = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setLoginError('')
+
+    if (password !== confirmation) {
+      setLoginError('Passwords do not match.')
+      return
+    }
+
+    setIsLoggingIn(true)
+    try {
+      await register(name, email, password, registrationRole)
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+      setIsLoggingIn(false)
+      return
+    }
+
+    try {
+      const authenticatedUser = await login(email, password)
+      setShowLogin(false)
+      setName('')
+      setEmail('')
+      setPassword('')
+      setConfirmation('')
+      navigateForUser(authenticatedUser)
+    } catch (error) {
+      setPassword('')
+      setConfirmation('')
+      setModalMode('login')
+      setLoginError(
+        `Your account was created, but automatic login failed${error instanceof Error ? `: ${error.message}` : '.'} Please log in manually.`,
+      )
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
+  const openModal = (mode: AuthModalMode) => {
+    setLoginError('')
+    setModalMode(mode)
+    setShowLogin(true)
   }
 
   const handleLogout = () => {
@@ -88,8 +172,7 @@ function HomePage() {
               <>
                 <button
                   onClick={() => {
-                    setLoginError('')
-                    setShowLogin(true)
+                    openModal('login')
                   }}
                   className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-white/5"
                 >
@@ -98,8 +181,7 @@ function HomePage() {
 
                 <button
                   onClick={() => {
-                    setLoginError('')
-                    setShowLogin(true)
+                    openModal('choose-role')
                   }}
                   className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium hover:bg-indigo-400"
                 >
@@ -138,8 +220,7 @@ function HomePage() {
                 <button
                   onClick={() => {
                     if (!isAuthenticated) {
-                      setLoginError('')
-                      setShowLogin(true)
+                      openModal('login')
                     }
                   }}
                   className="rounded-lg bg-indigo-500 px-6 py-3 font-medium hover:bg-indigo-400"
@@ -147,7 +228,7 @@ function HomePage() {
                   Browse Courses
                 </button>
 
-                <button className="rounded-lg border border-white/15 px-6 py-3 font-medium text-slate-200 hover:bg-white/5">
+                <button onClick={() => openModal('choose-role')} className="rounded-lg border border-white/15 px-6 py-3 font-medium text-slate-200 hover:bg-white/5">
                   Become an Educator
                 </button>
               </div>
@@ -162,6 +243,7 @@ function HomePage() {
                     <p className="text-sm text-slate-400">
                       Featured Course
                     </p>
+
                     <h2 className="mt-1 text-2xl font-semibold">
                       Learn Guitar from Scratch
                     </h2>
@@ -177,6 +259,7 @@ function HomePage() {
                     <p className="text-sm text-slate-400">
                       Module 01
                     </p>
+
                     <p className="mt-1 font-medium">
                       Getting Started
                     </p>
@@ -186,6 +269,7 @@ function HomePage() {
                     <p className="text-sm text-slate-400">
                       Module 02
                     </p>
+
                     <p className="mt-1 font-medium">
                       Chords & Techniques
                     </p>
@@ -195,6 +279,7 @@ function HomePage() {
                     <p className="text-sm text-slate-400">
                       Module 03
                     </p>
+
                     <p className="mt-1 font-medium">
                       Playing Your First Song
                     </p>
@@ -260,8 +345,7 @@ function HomePage() {
             <button
               onClick={() => {
                 if (!isAuthenticated) {
-                  setLoginError('')
-                  setShowLogin(true)
+                  openModal('login')
                 }
               }}
               className="mt-8 rounded-lg bg-indigo-500 px-6 py-3 font-medium hover:bg-indigo-400"
@@ -276,6 +360,7 @@ function HomePage() {
       <footer className="border-t border-white/10 px-6 py-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 NoteVerse. All rights reserved.</p>
+
           <p>Learn. Practice. Create.</p>
         </div>
       </footer>
@@ -287,81 +372,65 @@ function HomePage() {
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-bold">
-                  Welcome back
+                  {modalMode === 'login' ? 'Welcome back' : modalMode === 'choose-role' ? 'Join NoteVerse' : `Create ${registrationRole === 'STUDENT' ? 'student' : 'educator'} account`}
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-400">
-                  Login to continue learning with NoteVerse.
+                  {modalMode === 'login' ? 'Login to continue learning with NoteVerse.' : 'Create an account to get started.'}
                 </p>
               </div>
 
               <button
                 onClick={() => setShowLogin(false)}
                 className="text-xl text-slate-400 hover:text-white"
-                aria-label="Close login"
+                aria-label="Close account dialog"
               >
                 ×
               </button>
             </div>
 
-            <form
-              onSubmit={handleLogin}
-              className="mt-8 space-y-5"
-            >
-              <div>
-                <label
-                  htmlFor="email"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Email
-                </label>
-
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="student@noteverse.com"
-                  required
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-indigo-400"
-                />
+            {modalMode === 'choose-role' ? (
+              <div className="mt-8 grid gap-3">
+                <button onClick={() => { setRegistrationRole('STUDENT'); setModalMode('signup') }} className="rounded-lg bg-indigo-500 px-4 py-3 font-medium hover:bg-indigo-400">Continue as Student</button>
+                <button onClick={() => { setRegistrationRole('EDUCATOR'); setModalMode('signup') }} className="rounded-lg border border-white/15 px-4 py-3 font-medium text-slate-200 hover:bg-white/5">Apply as Educator</button>
+                <button onClick={() => setModalMode('login')} className="text-sm text-indigo-300 hover:text-indigo-200">Already have an account? Login</button>
               </div>
+            ) : (
+              <form onSubmit={modalMode === 'login' ? handleLogin : handleRegistration} className="mt-8 space-y-5">
+                {modalMode === 'signup' && <div>
+                  <label htmlFor="signup-name" className="mb-2 block text-sm font-medium text-slate-300">Name</label>
+                  <input id="signup-name" type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-indigo-400" />
+                </div>}
 
-              <div>
-                <label
-                  htmlFor="password"
-                  className="mb-2 block text-sm font-medium text-slate-300"
-                >
-                  Password
-                </label>
-
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) =>
-                    setPassword(event.target.value)
-                  }
-                  placeholder="Enter your password"
-                  required
-                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-indigo-400"
-                />
-              </div>
-
-              {loginError && (
-                <div className="rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">
-                  {loginError}
+                <div>
+                  <label htmlFor="auth-email" className="mb-2 block text-sm font-medium text-slate-300">Email</label>
+                  <input id="auth-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-indigo-400" />
                 </div>
-              )}
 
-              <button
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full rounded-lg bg-indigo-500 px-4 py-3 font-medium hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isLoggingIn ? 'Logging in...' : 'Login'}
-              </button>
-            </form>
+                <div>
+                  <label htmlFor="auth-password" className="mb-2 block text-sm font-medium text-slate-300">Password</label>
+                  <input id="auth-password" type="password" autoComplete={modalMode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={modalMode === 'signup' ? 8 : undefined} required className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-indigo-400" />
+                  {modalMode === 'signup' && <div className="mt-2 text-sm text-slate-400" aria-live="polite">
+                    <p>Password strength: <span className="text-indigo-300">{getPasswordFeedback(password).label}</span></p>
+                    {getPasswordFeedback(password).suggestions.length > 0 && <ul className="mt-1 list-inside list-disc">{getPasswordFeedback(password).suggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}</ul>}
+                  </div>}
+                </div>
+
+                {modalMode === 'signup' && <div>
+                  <label htmlFor="auth-confirm-password" className="mb-2 block text-sm font-medium text-slate-300">Confirm password</label>
+                  <input id="auth-confirm-password" type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-indigo-400" />
+                  {confirmation && password !== confirmation && <p className="mt-2 text-sm text-red-300">Passwords do not match.</p>}
+                </div>}
+
+                {loginError && <div role="alert" className="rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-300">{loginError}</div>}
+                <button type="submit" disabled={isLoggingIn || (modalMode === 'signup' && (password !== confirmation || password.length < 8))} className="w-full rounded-lg bg-indigo-500 px-4 py-3 font-medium hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isLoggingIn ? 'Please wait...' : modalMode === 'login' ? 'Login' : 'Create account'}
+                </button>
+                <button type="button" onClick={() => { setLoginError(''); setModalMode(modalMode === 'login' ? 'choose-role' : 'login') }} className="w-full text-sm text-indigo-300 hover:text-indigo-200">
+                  {modalMode === 'login' ? 'New to NoteVerse? Create an account' : 'Already have an account? Login'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -374,7 +443,10 @@ type FeatureCardProps = {
   description: string
 }
 
-function FeatureCard({ title, description }: FeatureCardProps) {
+function FeatureCard({
+  title,
+  description,
+}: FeatureCardProps) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
       <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
