@@ -5,6 +5,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -35,7 +36,7 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+router.post('/',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
     const { title, content, position, moduleId } = req.body
 
@@ -105,7 +106,7 @@ router.post('/',authenticateToken,requireRole('EDUCATOR'),async (req: AuthReques
   }
 })
 
-router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
     const lessonId = Number(req.params.id)
     const { title, content, position } = req.body
@@ -181,7 +182,7 @@ router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRe
   }
 })
 
-router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
     const lessonId = Number(req.params.id)
 

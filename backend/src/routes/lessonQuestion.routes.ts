@@ -5,6 +5,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -91,7 +92,7 @@ router.post('/',authenticateToken,requireRole('STUDENT'),async (req: AuthRequest
 )
 
 // Answer a lesson question
-router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),async (req: AuthRequest, res) => {
+router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
     const questionId = Number(req.params.id)
     const { answer } = req.body

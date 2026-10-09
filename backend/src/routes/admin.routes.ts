@@ -17,6 +17,7 @@ router.get('/users',authenticateToken,requireRole('ADMIN'),async (req: AuthReque
           email: true,
           createdAt: true,
           updatedAt: true,
+          educatorApprovalStatus: true,
           roles: {
             select: {
               role: {
@@ -41,6 +42,7 @@ router.get('/users',authenticateToken,requireRole('ADMIN'),async (req: AuthReque
           roles: user.roles.map((userRole) => userRole.role.name),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
+          educatorApprovalStatus: user.educatorApprovalStatus,
         })),
       })
     } catch (error) {
@@ -79,6 +81,11 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
         where: {
           id: userId,
         },
+        include: {
+          roles: {
+            include: { role: true },
+          },
+        },
       })
 
       if (!user) {
@@ -101,6 +108,16 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
         })
       }
 
+      const isAlreadyEducator = user.roles.some(
+        (userRole) => userRole.role.name === 'EDUCATOR',
+      )
+      const educatorApprovalStatus =
+        normalizedRole === 'EDUCATOR'
+          ? isAlreadyEducator
+            ? user.educatorApprovalStatus
+            : 'PENDING'
+          : 'NOT_APPLICABLE'
+
       await prisma.$transaction(async (tx) => {
         await tx.userRole.deleteMany({
             where: {
@@ -114,6 +131,11 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
             roleId: selectedRole.id,
             },
         })
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { educatorApprovalStatus },
+        })
         })
 
       return res.json({
@@ -124,6 +146,7 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
           name: user.name,
           email: user.email,
           role: normalizedRole,
+          educatorApprovalStatus,
         },
       })
     } catch (error) {
@@ -132,6 +155,100 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
       return res.status(500).json({
         success: false,
         message: 'Failed to update user role',
+      })
+    }
+  },
+)
+
+router.get(
+  '/educator-applications',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (_req: AuthRequest, res) => {
+    try {
+      const educators = await prisma.user.findMany({
+        where: {
+          roles: { some: { role: { name: 'EDUCATOR' } } },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
+          educatorApprovalStatus: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      return res.json({ success: true, data: educators })
+    } catch (error) {
+      console.error('Admin educator applications error:', error)
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch educator applications',
+      })
+    }
+  },
+)
+
+router.patch(
+  '/educator-applications/:id',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: AuthRequest, res) => {
+    try {
+      const userId = Number(req.params.id)
+      const status = String(req.body.status || '').toUpperCase()
+
+      if (!Number.isInteger(userId) || userId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid user ID' })
+      }
+
+      if (!['APPROVED', 'REJECTED'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Status must be APPROVED or REJECTED',
+        })
+      }
+
+      const approvalStatus =
+        status === 'APPROVED' ? 'APPROVED' as const : 'REJECTED' as const
+
+      const educator = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          roles: { some: { role: { name: 'EDUCATOR' } } },
+        },
+      })
+
+      if (!educator) {
+        return res.status(404).json({
+          success: false,
+          message: 'Educator application not found',
+        })
+      }
+
+      const updatedEducator = await prisma.user.update({
+        where: { id: userId },
+        data: { educatorApprovalStatus: approvalStatus },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          educatorApprovalStatus: true,
+        },
+      })
+
+      return res.json({
+        success: true,
+        message: `Educator application ${status.toLowerCase()}`,
+        data: updatedEducator,
+      })
+    } catch (error) {
+      console.error('Admin educator application update error:', error)
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update educator application',
       })
     }
   },

@@ -81,6 +81,8 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         email: normalizedEmail,
         password: hashedPassword,
+        educatorApprovalStatus:
+          normalizedRole === 'EDUCATOR' ? 'PENDING' : 'NOT_APPLICABLE',
         roles: {
           create: {
             roleId: selectedRole.id,
@@ -104,6 +106,7 @@ router.post('/', async (req, res) => {
         name: user.name,
         email: user.email,
         roles: user.roles.map((userRole) => userRole.role.name),
+        educatorApprovalStatus: user.educatorApprovalStatus,
       },
     })
   } catch (error) {
@@ -191,6 +194,7 @@ router.post('/login', async (req, res) => {
       name: user.name,
       email: user.email,
       roles: user.roles.map((userRole) => userRole.role.name),
+      educatorApprovalStatus: user.educatorApprovalStatus,
       token,
     },
   })
@@ -233,6 +237,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
         name: user.name,
         email: user.email,
         roles: user.roles.map((userRole) => userRole.role.name),
+        educatorApprovalStatus: user.educatorApprovalStatus,
       },
     })
   } catch (error) {

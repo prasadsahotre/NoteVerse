@@ -8,6 +8,7 @@ import {
 } from '../middleware/auth.middleware.js'
 
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -17,6 +18,7 @@ router.post(
   '/',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const { title, lessonId } = req.body
@@ -121,6 +123,7 @@ router.post(
   '/questions',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const { quizId, question, options } = req.body

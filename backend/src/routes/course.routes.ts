@@ -5,6 +5,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -269,6 +270,7 @@ router.post(
   '/',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const { title, description } = req.body
@@ -335,6 +337,7 @@ router.patch(
   '/:id',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const courseId = Number(req.params.id)
@@ -429,6 +432,7 @@ router.patch(
   '/:id/publish',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const courseId = Number(req.params.id)
@@ -498,6 +502,7 @@ router.delete(
   '/:id',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const courseId = Number(req.params.id)

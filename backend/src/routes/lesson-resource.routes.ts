@@ -8,6 +8,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 import upload from '../middleware/upload.middleware.js'
 import {
   uploadToS3,
@@ -78,6 +79,7 @@ router.post(
   '/upload',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   upload.single('file'),
   async (req: AuthRequest, res) => {
     try {
@@ -210,6 +212,7 @@ router.post(
   '/',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const { title, type, url, lessonId } = req.body
@@ -385,6 +388,7 @@ router.patch(
   '/:id',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const resourceId = Number(req.params.id)
@@ -476,6 +480,7 @@ router.delete(
   '/:id',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const resourceId = Number(req.params.id)
