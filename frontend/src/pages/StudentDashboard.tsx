@@ -1,4 +1,4 @@
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
@@ -12,8 +12,29 @@ interface CourseProgressResponse {
   data: CourseProgress
 }
 
+interface CertificatesResponse {
+  success: boolean
+  data: { id: number }[]
+}
+
 function StudentDashboard() {
   const { user, logout } = useAuth()
+
+  const certificatesQuery = useQuery({
+    queryKey: ['student-certificates', user?.id],
+    queryFn: async () => {
+      if (!user?.id) {
+        throw new Error('User ID is required')
+      }
+
+      const response = await apiRequest<CertificatesResponse>(
+        '/certificates',
+      )
+
+      return response.data
+    },
+    enabled: Boolean(user?.id),
+  })
 
   const enrollmentsQuery = useQueries({
     queries: [
@@ -63,7 +84,7 @@ function StudentDashboard() {
       })) ?? [],
   })
 
-  const getProgressForCourse = (courseId: number) => {
+  const getProgressQueryForCourse = (courseId: number) => {
     const index = enrollments?.findIndex(
       (enrollment) => enrollment.courseId === courseId,
     )
@@ -72,12 +93,19 @@ function StudentDashboard() {
       return undefined
     }
 
-    return progressQueries[index]?.data
+    return progressQueries[index]
   }
 
   const isLoadingProgress = progressQueries.some(
     (query) => query.isLoading,
   )
+  const isErrorProgress = progressQueries.some(
+    (query) => query.isError,
+  )
+  const isLoadingCompletedLessons =
+    isLoadingEnrollments || isLoadingProgress
+  const isErrorCompletedLessons =
+    isErrorEnrollments || isErrorProgress
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -132,8 +160,15 @@ function StudentDashboard() {
             <p className="mt-2 text-3xl font-bold">
               {isLoadingEnrollments
                 ? '...'
-                : enrollments?.length ?? 0}
+                : isErrorEnrollments
+                  ? '—'
+                  : enrollments?.length ?? '—'}
             </p>
+            {isErrorEnrollments && (
+              <p className="mt-2 text-sm text-red-300">
+                Unable to load course count.
+              </p>
+            )}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -142,15 +177,22 @@ function StudentDashboard() {
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              {isLoadingProgress
+              {isLoadingCompletedLessons
                 ? '...'
-                : progressQueries.reduce(
+                : isErrorCompletedLessons
+                  ? '—'
+                  : progressQueries.reduce(
                     (total, query) =>
                       total +
                       (query.data?.completedLessons ?? 0),
                     0,
                   )}
             </p>
+            {isErrorCompletedLessons && (
+              <p className="mt-2 text-sm text-red-300">
+                Unable to load completed lesson count.
+              </p>
+            )}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -159,8 +201,17 @@ function StudentDashboard() {
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              —
+              {certificatesQuery.isLoading
+                ? '...'
+                : certificatesQuery.isError
+                  ? '—'
+                  : certificatesQuery.data?.length ?? '—'}
             </p>
+            {certificatesQuery.isError && (
+              <p className="mt-2 text-sm text-red-300">
+                Unable to load certificate count.
+              </p>
+            )}
           </div>
         </div>
 
@@ -209,9 +260,10 @@ function StudentDashboard() {
             enrollments.length > 0 && (
               <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {enrollments.map((enrollment) => {
-                  const progress = getProgressForCourse(
+                  const progressQuery = getProgressQueryForCourse(
                     enrollment.courseId,
                   )
+                  const progress = progressQuery?.data
 
                   return (
                     <div
@@ -248,28 +300,47 @@ function StudentDashboard() {
                           </span>
 
                           <span className="text-sm font-semibold text-white">
-                            {progress
-                              ? `${progress.progressPercentage}%`
-                              : '...'}
+                            {progressQuery?.isLoading
+                              ? '...'
+                              : progressQuery?.isError
+                                ? 'Unavailable'
+                                : progress
+                                  ? `${progress.progressPercentage}%`
+                                  : '—'}
                           </span>
                         </div>
 
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-indigo-500 transition-all duration-500"
-                            style={{
-                              width: `${
-                                progress?.progressPercentage ?? 0
-                              }%`,
-                            }}
-                          />
-                        </div>
+                        {progress && !progressQuery?.isError ? (
+                          <>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                              <div
+                                className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+                                style={{
+                                  width: `${progress.progressPercentage}%`,
+                                }}
+                              />
+                            </div>
 
-                        <p className="mt-3 text-sm text-slate-500">
-                          {progress
-                            ? `${progress.completedLessons} of ${progress.totalLessons} lessons completed`
-                            : 'Loading progress...'}
-                        </p>
+                            <p className="mt-3 text-sm text-slate-500">
+                              {progress.completedLessons} of{' '}
+                              {progress.totalLessons} lessons completed
+                            </p>
+                          </>
+                        ) : (
+                          <p
+                            className={`text-sm ${
+                              progressQuery?.isError
+                                ? 'text-red-300'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            {progressQuery?.isLoading
+                              ? 'Loading progress...'
+                              : progressQuery?.isError
+                                ? 'Unable to load progress.'
+                                : 'Progress unavailable.'}
+                          </p>
+                        )}
 
                         {/* Continue Learning */}
                         {Number.isInteger(enrollment.courseId) &&
