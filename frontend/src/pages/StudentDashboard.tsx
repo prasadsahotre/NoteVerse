@@ -148,6 +148,13 @@ function StudentDashboard() {
           <p className="mt-3 text-slate-400">
             Continue learning and keep building your musical skills.
           </p>
+
+          <Link
+            to="/student/discover"
+            className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
+          >
+            Browse Courses
+          </Link>
         </div>
 
         {/* Stats */}
@@ -251,6 +258,12 @@ function StudentDashboard() {
                 <p className="mt-2 text-slate-400">
                   Explore available courses and start learning.
                 </p>
+                <Link
+                  to="/student/discover"
+                  className="mt-5 inline-block rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                >
+                  Browse Courses
+                </Link>
               </div>
             )}
 

@@ -6,6 +6,8 @@ import EducatorDashboard from '../pages/EducatorDashboard'
 import AdminDashboard from '../pages/AdminDashboard'
 import ProtectedRoute from '../components/ProtectedRoute'
 import StudentCoursePage from '../pages/StudentCoursePage'
+import StudentCourseDiscoveryPage from '../pages/StudentCourseDiscoveryPage'
+import StudentCoursePreviewPage from '../pages/StudentCoursePreviewPage'
 import StudentLessonPage from '../pages/StudentLessonPage'
 import StudentQuizPage from '../pages/StudentQuizPage'
 
@@ -19,6 +21,22 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={['STUDENT']}>
         <StudentDashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/student/discover',
+    element: (
+      <ProtectedRoute allowedRoles={['STUDENT']}>
+        <StudentCourseDiscoveryPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/student/discover/:courseId',
+    element: (
+      <ProtectedRoute allowedRoles={['STUDENT']}>
+        <StudentCoursePreviewPage />
       </ProtectedRoute>
     ),
   },
