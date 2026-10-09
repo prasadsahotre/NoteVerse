@@ -17,6 +17,14 @@ function HomeRoute() {
     return <Navigate to="/student" replace />
   }
 
+  if (user?.roles.includes('EDUCATOR')) {
+    return <Navigate to="/educator" replace />
+  }
+
+  if (user?.roles.includes('ADMIN')) {
+    return <Navigate to="/admin" replace />
+  }
+
   return <HomePage />
 }
 
