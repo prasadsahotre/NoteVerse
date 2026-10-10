@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 
-type CourseSort = 'newest' | 'oldest' | 'popular'
+type CourseSort = 'newest' | 'oldest' | 'popular' | 'top-rated'
 
 interface DiscoveredCourse {
   id: number
@@ -16,6 +16,8 @@ interface DiscoveredCourse {
   _count: {
     enrollments: number
   }
+  averageRating: number | null
+  reviewCount: number
 }
 
 interface CourseDiscoveryResponse {
@@ -113,6 +115,7 @@ function StudentCourseDiscoveryPage() {
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="popular">Most popular</option>
+              <option value="top-rated">Top Rated</option>
             </select>
           </label>
         </div>
@@ -183,6 +186,24 @@ function StudentCourseDiscoveryPage() {
                         {course._count.enrollments === 1
                           ? 'student'
                           : 'students'}
+                      </p>
+                      <p
+                        className="mt-3 text-sm"
+                        aria-label={course.reviewCount > 0
+                          ? `Rated ${course.averageRating?.toFixed(1)} out of 5 from ${course.reviewCount} reviews`
+                          : 'No ratings yet'}
+                      >
+                        {course.reviewCount > 0 && course.averageRating !== null ? (
+                          <>
+                            <span className="text-amber-300" aria-hidden="true">★</span>{' '}
+                            <span className="font-semibold text-amber-200">{course.averageRating.toFixed(1)} / 5</span>
+                            <span className="ml-2 text-slate-400">
+                              {course.reviewCount} {course.reviewCount === 1 ? 'review' : 'reviews'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-400">No ratings yet</span>
+                        )}
                       </p>
                     </div>
                     <Link

@@ -6,8 +6,21 @@ import {
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
 import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
+import { Prisma } from '../generated/prisma/client.js'
 
 const router = Router()
+
+interface DiscoveredCourseRow {
+  id: number
+  title: string
+  description: string | null
+  createdAt: Date
+  updatedAt: Date
+  educator: { id: number; name: string }
+  _count: { enrollments: number }
+  averageRating: number | null
+  reviewCount: number
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -44,10 +57,10 @@ router.get('/', async (req, res) => {
       })
     }
 
-    if (!['newest', 'oldest', 'popular'].includes(sort)) {
+    if (!['newest', 'oldest', 'popular', 'top-rated'].includes(sort)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid sort. Use newest, oldest, or popular',
+        message: 'Invalid sort. Use newest, oldest, popular, or top-rated',
       })
     }
 
@@ -81,46 +94,58 @@ router.get('/', async (req, res) => {
 
     const skip = (page - 1) * limit
 
-    const orderBy =
-      sort === 'oldest'
-        ? {
-            createdAt: 'asc' as const,
-          }
-        : sort === 'popular'
-          ? {
-              enrollments: {
-                _count: 'desc' as const,
-              },
-            }
-          : {
-              createdAt: 'desc' as const,
-            }
+    const orderBy = sort === 'oldest'
+      ? Prisma.sql`c."createdAt" ASC`
+      : sort === 'popular'
+        ? Prisma.sql`COALESCE(enrollment_summary."enrollmentCount", 0) DESC`
+        : sort === 'top-rated'
+          ? Prisma.sql`CASE WHEN COALESCE(review_summary."reviewCount", 0) = 0 THEN 1 ELSE 0 END ASC,
+              review_summary."averageRating" DESC NULLS LAST,
+              review_summary."reviewCount" DESC,
+              c."createdAt" DESC,
+              c."id" DESC`
+          : Prisma.sql`c."createdAt" DESC`
+
+    const searchFilter = search
+      ? Prisma.sql`AND (
+          strpos(lower(c."title"), lower(${search})) > 0 OR
+          strpos(lower(coalesce(c."description", '')), lower(${search})) > 0
+        )`
+      : Prisma.empty
+    const educatorFilter = educatorId !== undefined
+      ? Prisma.sql`AND c."educatorId" = ${educatorId}`
+      : Prisma.empty
 
     const [courses, total] = await Promise.all([
-      prisma.course.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy,
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          createdAt: true,
-          updatedAt: true,
-          educator: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          _count: {
-            select: {
-              enrollments: true,
-            },
-          },
-        },
-      }),
+      prisma.$queryRaw<DiscoveredCourseRow[]>`
+        SELECT
+          c."id",
+          c."title",
+          c."description",
+          c."createdAt",
+          c."updatedAt",
+          json_build_object('id', educator."id", 'name', educator."name") AS "educator",
+          json_build_object('enrollments', COALESCE(enrollment_summary."enrollmentCount", 0)) AS "_count",
+          review_summary."averageRating",
+          COALESCE(review_summary."reviewCount", 0)::int AS "reviewCount"
+        FROM "Course" c
+        INNER JOIN "User" educator ON educator."id" = c."educatorId"
+        LEFT JOIN (
+          SELECT "courseId", COUNT(*)::int AS "enrollmentCount"
+          FROM "Enrollment"
+          GROUP BY "courseId"
+        ) enrollment_summary ON enrollment_summary."courseId" = c."id"
+        LEFT JOIN (
+          SELECT "courseId", AVG("rating")::float8 AS "averageRating", COUNT(*)::int AS "reviewCount"
+          FROM "CourseReview"
+          GROUP BY "courseId"
+        ) review_summary ON review_summary."courseId" = c."id"
+        WHERE c."status" = 'PUBLISHED'
+        ${educatorFilter}
+        ${searchFilter}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${skip}
+      `,
 
       prisma.course.count({
         where,

@@ -25,6 +25,7 @@ if (!testDatabaseUrl) {
     const suffix = randomUUID()
     const createdUserIds: number[] = []
     const createdCourseIds: number[] = []
+    const createdReviewIds: number[] = []
     let enrolledStudentId: number | undefined
     let certificateIds: number[] = []
     let server: ReturnType<typeof app.listen> | undefined
@@ -54,6 +55,7 @@ if (!testDatabaseUrl) {
       const educator = await createUser('Course Owner', 'EDUCATOR')
       const otherEducator = await createUser('Other Educator', 'EDUCATOR')
       const student = await createUser('Enrolled Student', 'STUDENT')
+      const secondReviewer = await createUser('Second Review Student', 'STUDENT')
       enrolledStudentId = student.id
 
       const publishedCourse = await prisma.course.create({
@@ -68,7 +70,40 @@ if (!testDatabaseUrl) {
       const emptyCourse = await prisma.course.create({
         data: { title: `Empty course ${suffix}`, educatorId: educator.id },
       })
-      createdCourseIds.push(publishedCourse.id, draftCourse.id, protectedCourse.id, emptyCourse.id)
+      const sortMarker = `ReviewSort-${suffix}`
+      const createRatedCourse = async (
+        title: string,
+        status: 'PUBLISHED' | 'DRAFT' = 'PUBLISHED',
+        educatorId = educator.id,
+      ) => prisma.course.create({ data: { title: `${sortMarker} ${title}`, educatorId, status } })
+      const highestRatedCourse = await createRatedCourse('highest average')
+      const tieManyReviewsCourse = await createRatedCourse('same average more reviews')
+      const tieFewReviewsCourse = await createRatedCourse('same average fewer reviews')
+      const unratedCourse = await createRatedCourse('unrated')
+      const draftRatedCourse = await createRatedCourse('unpublished', 'DRAFT')
+      const otherEducatorCourse = await createRatedCourse('other educator', 'PUBLISHED', otherEducator.id)
+      createdCourseIds.push(
+        publishedCourse.id,
+        draftCourse.id,
+        protectedCourse.id,
+        emptyCourse.id,
+        highestRatedCourse.id,
+        tieManyReviewsCourse.id,
+        tieFewReviewsCourse.id,
+        unratedCourse.id,
+        draftRatedCourse.id,
+        otherEducatorCourse.id,
+      )
+
+      const createReview = async (userId: number, courseId: number, rating: number) => {
+        const review = await prisma.courseReview.create({ data: { userId, courseId, rating } })
+        createdReviewIds.push(review.id)
+      }
+      await createReview(student.id, highestRatedCourse.id, 5)
+      await createReview(student.id, tieManyReviewsCourse.id, 5)
+      await createReview(secondReviewer.id, tieManyReviewsCourse.id, 3)
+      await createReview(student.id, tieFewReviewsCourse.id, 4)
+      await createReview(student.id, draftRatedCourse.id, 5)
 
       await prisma.enrollment.create({ data: { userId: student.id, courseId: publishedCourse.id } })
       const certificate = await prisma.certificate.create({
@@ -98,6 +133,86 @@ if (!testDatabaseUrl) {
           method,
           headers: { Authorization: `Bearer ${token}` },
         })
+
+      await t.test('discovery returns real review aggregates and preserves published search and sort behavior', async () => {
+        const response = await fetch(
+          `${baseUrl}/courses?sort=top-rated&q=${encodeURIComponent(sortMarker)}&educatorId=${educator.id}&limit=10`,
+        )
+        assert.equal(response.status, 200)
+        const body = await response.json() as {
+          success: boolean
+          data: Array<{
+            id: number
+            title: string
+            description: string | null
+            educator: { id: number; name: string }
+            _count: { enrollments: number }
+            averageRating: number | null
+            reviewCount: number
+          }>
+          pagination: { total: number; totalPages: number }
+        }
+        assert.equal(body.success, true)
+        assert.equal(body.pagination.total, 4)
+        assert.deepEqual(body.data.map((course) => course.id), [
+          highestRatedCourse.id,
+          tieManyReviewsCourse.id,
+          tieFewReviewsCourse.id,
+          unratedCourse.id,
+        ])
+        assert.equal(body.data[0].averageRating, 5)
+        assert.equal(body.data[0].reviewCount, 1)
+        assert.equal(body.data[1].averageRating, 4)
+        assert.equal(body.data[1].reviewCount, 2)
+        assert.equal(body.data[2].averageRating, 4)
+        assert.equal(body.data[2].reviewCount, 1)
+        assert.equal(body.data[3].averageRating, null)
+        assert.equal(body.data[3].reviewCount, 0)
+        assert.equal(body.data[0].educator.id, educator.id)
+        assert.equal(body.data[0].educator.name, educator.name)
+        assert.ok(body.data[0]._count.enrollments >= 0)
+        assert.equal(body.data.some((course) => course.id === draftRatedCourse.id), false)
+
+        const otherEducatorResponse = await fetch(
+          `${baseUrl}/courses?sort=top-rated&q=${encodeURIComponent(sortMarker)}&educatorId=${otherEducator.id}&limit=10`,
+        )
+        const otherEducatorBody = await otherEducatorResponse.json() as {
+          data: Array<{ id: number }>
+          pagination: { total: number }
+        }
+        assert.equal(otherEducatorResponse.status, 200)
+        assert.equal(otherEducatorBody.pagination.total, 1)
+        assert.deepEqual(otherEducatorBody.data.map((course) => course.id), [otherEducatorCourse.id])
+
+        const paginatedResponse = await fetch(
+          `${baseUrl}/courses?sort=top-rated&q=${encodeURIComponent(sortMarker)}&educatorId=${educator.id}&page=2&limit=2`,
+        )
+        const paginatedBody = await paginatedResponse.json() as {
+          data: Array<{ id: number }>
+          pagination: { page: number; limit: number; total: number; totalPages: number }
+        }
+        assert.equal(paginatedResponse.status, 200)
+        assert.equal(paginatedBody.pagination.page, 2)
+        assert.equal(paginatedBody.pagination.limit, 2)
+        assert.equal(paginatedBody.pagination.total, 4)
+        assert.equal(paginatedBody.pagination.totalPages, 2)
+        assert.deepEqual(paginatedBody.data.map((course) => course.id), [
+          tieFewReviewsCourse.id,
+          unratedCourse.id,
+        ])
+
+        const newestResponse = await fetch(
+          `${baseUrl}/courses?sort=newest&q=${encodeURIComponent(sortMarker)}&educatorId=${educator.id}&limit=10`,
+        )
+        const newest = await newestResponse.json() as {
+          data: Array<{ id: number; createdAt: string }>
+        }
+        assert.equal(newestResponse.status, 200)
+        assert.equal(newest.data.length, 4)
+        for (let index = 1; index < newest.data.length; index += 1) {
+          assert.ok(Date.parse(newest.data[index - 1].createdAt) >= Date.parse(newest.data[index].createdAt))
+        }
+      })
 
       await t.test('owner can unpublish; discovery hides the course while enrolled learning remains available', async () => {
         const response = await request(`/courses/${publishedCourse.id}/unpublish`, ownerToken, 'PATCH')
@@ -137,6 +252,9 @@ if (!testDatabaseUrl) {
       }
       if (certificateIds.length > 0) {
         await prisma.certificate.deleteMany({ where: { id: { in: certificateIds } } })
+      }
+      if (createdReviewIds.length > 0) {
+        await prisma.courseReview.deleteMany({ where: { id: { in: createdReviewIds } } })
       }
       if (enrolledStudentId !== undefined && createdCourseIds.length > 0) {
         await prisma.enrollment.deleteMany({
