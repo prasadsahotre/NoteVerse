@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 interface EducatorCourseAnalytics {
   courseId: number
@@ -403,6 +403,12 @@ function EducatorDashboard() {
                         <span>Updated <time dateTime={course.updatedAt}>{new Date(course.updatedAt).toLocaleDateString()}</time></span>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-3">
+                        <Link
+                          to={`/educator/courses/${course.id}/curriculum`}
+                          className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400"
+                        >
+                          Manage curriculum
+                        </Link>
                         <button type="button" onClick={() => startEditingCourse(course)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800">Edit details</button>
                         {course.status === 'DRAFT' && (
                           <button

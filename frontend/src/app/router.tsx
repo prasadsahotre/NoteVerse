@@ -3,6 +3,7 @@ import HomeRoute from '../components/HomeRoute'
 import NotFoundPage from '../pages/NotFoundPage'
 import StudentDashboard from '../pages/StudentDashboard'
 import EducatorDashboard from '../pages/EducatorDashboard'
+import EducatorCurriculumPage from '../pages/EducatorCurriculumPage'
 import AdminDashboard from '../pages/AdminDashboard'
 import ProtectedRoute from '../components/ProtectedRoute'
 import StudentCoursePage from '../pages/StudentCoursePage'
@@ -61,6 +62,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={['STUDENT']}>
         <StudentQuizPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/educator/courses/:courseId/curriculum',
+    element: (
+      <ProtectedRoute allowedRoles={['EDUCATOR']}>
+        <EducatorCurriculumPage />
       </ProtectedRoute>
     ),
   },

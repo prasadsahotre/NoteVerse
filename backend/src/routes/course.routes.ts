@@ -252,6 +252,57 @@ router.get(
   },
 )
 
+router.get(
+  '/:courseId/curriculum',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.courseId)
+
+      if (!Number.isInteger(courseId) || courseId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+        include: {
+          modules: {
+            orderBy: { position: 'asc' },
+            include: {
+              lessons: { orderBy: { position: 'asc' } },
+            },
+          },
+        },
+      })
+
+      if (!course) {
+        return res.status(404).json({ success: false, message: 'Course not found' })
+      }
+
+      if (course.educatorId !== req.user!.userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only view the curriculum for your own courses',
+        })
+      }
+
+      return res.json({ success: true, data: course })
+    } catch (error) {
+      console.error('Failed to fetch course curriculum:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch course curriculum',
+      })
+    }
+  },
+)
+
 router.get('/:id', async (req, res) => {
   try {
     const courseId = Number(req.params.id)

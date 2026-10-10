@@ -170,39 +170,43 @@ router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEd
       })
     }
 
-    const existingModule = await prisma.module.findUnique({
-      where: {
-        id: moduleId,
-      },
-      include: {
-        course: true,
-      },
-    })
+    const result = await prisma.$transaction(
+      async (transaction) => {
+        const module = await transaction.module.findUnique({
+          where: { id: moduleId },
+          include: {
+            course: { select: { educatorId: true } },
+            _count: { select: { lessons: true } },
+          },
+        })
 
-    if (!existingModule) {
-      return res.status(404).json({
-        success: false,
-        message: 'Module not found',
-      })
+        if (!module) return 'not-found' as const
+        if (module.course.educatorId !== req.user!.userId) return 'forbidden' as const
+        if (module._count.lessons > 0) return 'has-lessons' as const
+
+        await transaction.module.delete({ where: { id: moduleId } })
+        return 'deleted' as const
+      },
+      { isolationLevel: 'Serializable' },
+    )
+
+    if (result === 'not-found') {
+      return res.status(404).json({ success: false, message: 'Module not found' })
     }
-
-    if (existingModule.course.educatorId !== req.user!.userId) {
+    if (result === 'forbidden') {
       return res.status(403).json({
         success: false,
         message: 'You can only delete modules in your own course',
       })
     }
+    if (result === 'has-lessons') {
+      return res.status(409).json({
+        success: false,
+        message: 'This module contains lessons. Delete its lessons first if they are safe to remove.',
+      })
+    }
 
-    await prisma.module.delete({
-      where: {
-        id: moduleId,
-      },
-    })
-
-    res.json({
-      success: true,
-      message: 'Module deleted successfully',
-    })
+    return res.json({ success: true, message: 'Module deleted successfully' })
   } catch (error) {
     console.error('Failed to delete module:', error)
 

@@ -193,43 +193,57 @@ router.delete('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEd
       })
     }
 
-    const existingLesson = await prisma.lesson.findUnique({
-      where: {
-        id: lessonId,
-      },
-      include: {
-        module: {
+    const result = await prisma.$transaction(
+      async (transaction) => {
+        const lesson = await transaction.lesson.findUnique({
+          where: { id: lessonId },
           include: {
-            course: true,
+            module: { include: { course: { select: { educatorId: true } } } },
+            _count: {
+              select: {
+                progress: true,
+                quizzes: true,
+                questions: true,
+                resources: true,
+                reports: true,
+              },
+            },
           },
-        },
+        })
+
+        if (!lesson) return 'not-found' as const
+        if (lesson.module.course.educatorId !== req.user!.userId) return 'forbidden' as const
+
+        const quizAttempts = await transaction.quizAttempt.count({
+          where: { quiz: { is: { lessonId } } },
+        })
+        const hasDependents =
+          quizAttempts > 0 || Object.values(lesson._count).some((count) => count > 0)
+        if (hasDependents) return 'has-dependents' as const
+
+        await transaction.lesson.delete({ where: { id: lessonId } })
+        return 'deleted' as const
       },
-    })
+      { isolationLevel: 'Serializable' },
+    )
 
-    if (!existingLesson) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lesson not found',
-      })
+    if (result === 'not-found') {
+      return res.status(404).json({ success: false, message: 'Lesson not found' })
     }
-
-    if (existingLesson.module.course.educatorId !== req.user!.userId) {
+    if (result === 'forbidden') {
       return res.status(403).json({
         success: false,
         message: 'You can only delete lessons in your own course',
       })
     }
+    if (result === 'has-dependents') {
+      return res.status(409).json({
+        success: false,
+        message: 'This lesson has progress, quiz attempts or content, learner questions, resources, or reports and cannot be deleted.',
+      })
+    }
 
-    await prisma.lesson.delete({
-      where: {
-        id: lessonId,
-      },
-    })
-
-    res.json({
-      success: true,
-      message: 'Lesson deleted successfully',
-    })
+    return res.json({ success: true, message: 'Lesson deleted successfully' })
   } catch (error) {
     console.error('Failed to delete lesson:', error)
 
