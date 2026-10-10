@@ -29,3 +29,19 @@ export async function apiRequest<T>(
 
   return data
 }
+
+export async function apiDownload(endpoint: string): Promise<Blob> {
+  const token = getToken()
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(
+      data?.message || `Request failed with status ${response.status}`,
+    )
+  }
+
+  return response.blob()
+}

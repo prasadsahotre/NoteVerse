@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import { useAuth } from '../auth/useAuth'
@@ -44,10 +45,18 @@ interface CourseResponse {
   }
 }
 
+interface CertificateIssueResponse {
+  success: boolean
+  message: string
+  data: { id: number }
+}
+
 function StudentCoursePage() {
   const { courseId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [certificateFeedback, setCertificateFeedback] = useState('')
 
   const courseIdNumber = Number(courseId)
 
@@ -68,6 +77,36 @@ function StudentCoursePage() {
       Boolean(user) &&
       Number.isInteger(courseIdNumber) &&
       courseIdNumber > 0,
+  })
+
+  const certificateMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest<CertificateIssueResponse>(
+        '/certificates',
+        {
+          method: 'POST',
+          body: JSON.stringify({ courseId: courseIdNumber }),
+        },
+      )
+      return response.data
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['student-certificates', user?.id],
+      })
+      setCertificateFeedback('Certificate issued successfully. You can download it from your dashboard.')
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Unable to issue certificate.'
+      if (message === 'Certificate already issued for this course') {
+        void queryClient.invalidateQueries({
+          queryKey: ['student-certificates', user?.id],
+        })
+        setCertificateFeedback('A certificate has already been issued for this course. You can download it from your dashboard.')
+      } else {
+        setCertificateFeedback(message)
+      }
+    },
   })
 
   if (isLoading) {
@@ -175,6 +214,34 @@ function StudentCoursePage() {
                 style={{ width: `${data.progress.progressPercentage}%` }}
               />
             </div>
+            {data.progress.totalLessons > 0 &&
+              data.progress.completedLessons >= data.progress.totalLessons && (
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCertificateFeedback('')
+                      certificateMutation.mutate()
+                    }}
+                    disabled={certificateMutation.isPending || certificateMutation.isSuccess}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {certificateMutation.isPending
+                      ? 'Issuing certificate...'
+                      : certificateMutation.isSuccess
+                        ? 'Certificate issued'
+                        : 'Get Certificate'}
+                  </button>
+                  {certificateFeedback && (
+                    <p
+                      role="status"
+                      className={`mt-3 text-sm ${certificateMutation.isError ? 'text-amber-300' : 'text-green-300'}`}
+                    >
+                      {certificateFeedback}
+                    </p>
+                  )}
+                </div>
+              )}
           </div>
         </div>
 

@@ -1,7 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
-import { apiRequest } from '../api/client'
+import { apiDownload, apiRequest } from '../api/client'
 import type {
   CourseProgress,
   Enrollment,
@@ -14,11 +15,23 @@ interface CourseProgressResponse {
 
 interface CertificatesResponse {
   success: boolean
-  data: { id: number }[]
+  data: Certificate[]
+}
+
+interface Certificate {
+  id: number
+  certificateNo: string
+  issuedAt: string
+  course: {
+    id: number
+    title: string
+  }
 }
 
 function StudentDashboard() {
   const { user, logout } = useAuth()
+  const [downloadingCertificateId, setDownloadingCertificateId] = useState<number | null>(null)
+  const [downloadError, setDownloadError] = useState('')
 
   const certificatesQuery = useQuery({
     queryKey: ['student-certificates', user?.id],
@@ -35,6 +48,34 @@ function StudentDashboard() {
     },
     enabled: Boolean(user?.id),
   })
+
+  const handleCertificateDownload = async (certificate: Certificate) => {
+    setDownloadingCertificateId(certificate.id)
+    setDownloadError('')
+    let objectUrl: string | undefined
+
+    try {
+      const pdf = await apiDownload(`/certificates/${certificate.id}/download`)
+      objectUrl = URL.createObjectURL(pdf)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = `NoteVerse-Certificate-${certificate.certificateNo}.pdf`
+      document.body.appendChild(link)
+      try {
+        link.click()
+      } finally {
+        link.remove()
+      }
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Unable to download certificate.')
+    } finally {
+      if (objectUrl) {
+        const urlToRevoke = objectUrl
+        window.setTimeout(() => URL.revokeObjectURL(urlToRevoke), 1000)
+      }
+      setDownloadingCertificateId(null)
+    }
+  }
 
   const enrollmentsQuery = useQueries({
     queries: [
@@ -221,6 +262,57 @@ function StudentDashboard() {
             )}
           </div>
         </div>
+
+        {/* Certificates */}
+        <section className="mt-12">
+          <h2 className="text-2xl font-bold">Your Certificates</h2>
+
+          {certificatesQuery.isLoading && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-6 text-slate-400">
+              Loading certificates...
+            </div>
+          )}
+
+          {certificatesQuery.isError && (
+            <div role="alert" className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 p-6 text-red-300">
+              Unable to load your certificates. Please try again later.
+            </div>
+          )}
+
+          {downloadError && (
+            <div role="alert" className="mt-5 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">
+              {downloadError}
+            </div>
+          )}
+
+          {!certificatesQuery.isLoading && !certificatesQuery.isError && certificatesQuery.data?.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-6 text-slate-400">
+              You have not earned any certificates yet.
+            </div>
+          )}
+
+          {!certificatesQuery.isLoading && !certificatesQuery.isError && Boolean(certificatesQuery.data?.length) && (
+            <div className="mt-5 space-y-4">
+              {certificatesQuery.data?.map((certificate) => (
+                <article key={certificate.id} className="flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold">{certificate.course.title}</h3>
+                    <p className="mt-1 text-sm text-slate-400">Certificate No: {certificate.certificateNo}</p>
+                    <p className="mt-1 text-sm text-slate-500">Issued {new Date(certificate.issuedAt).toLocaleDateString()}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCertificateDownload(certificate)}
+                    disabled={downloadingCertificateId === certificate.id}
+                    className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {downloadingCertificateId === certificate.id ? 'Downloading...' : 'Download PDF'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Courses */}
         <section className="mt-12">
