@@ -5,6 +5,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -12,6 +13,7 @@ router.get(
   '/educator',
   authenticateToken,
   requireRole('EDUCATOR'),
+  requireApprovedEducator,
   async (req: AuthRequest, res) => {
     try {
       const educatorId = req.user!.userId
