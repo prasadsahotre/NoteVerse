@@ -58,6 +58,26 @@ interface RoleUpdateResponse {
   educatorApprovalStatus: EducatorApplication['educatorApprovalStatus']
 }
 
+type CourseStatus = 'DRAFT' | 'PUBLISHED'
+
+interface AdminCourse {
+  id: number
+  title: string
+  description: string | null
+  status: CourseStatus
+  educator: { id: number; name: string; email: string }
+  enrollmentCount: number
+  moduleCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+interface CourseStatusResponse {
+  id: number
+  title: string
+  status: CourseStatus
+}
+
 function AdminDashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -68,6 +88,10 @@ function AdminDashboard() {
   const [userRoleFilter, setUserRoleFilter] = useState('ALL')
   const [userStatusFilter, setUserStatusFilter] = useState('ALL')
   const [roleChangeCandidate, setRoleChangeCandidate] = useState<{ user: AdminUser; role: RoleUpdateVariables['role'] } | null>(null)
+  const [courseSearch, setCourseSearch] = useState('')
+  const [courseStatusFilter, setCourseStatusFilter] = useState<'ALL' | CourseStatus>('ALL')
+  const [courseStatusCandidate, setCourseStatusCandidate] = useState<{ course: AdminCourse; status: CourseStatus } | null>(null)
+  const [courseFeedback, setCourseFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const analyticsQuery = useQuery({
     queryKey: ['admin-analytics'],
@@ -115,6 +139,35 @@ function AdminDashboard() {
         kind: 'error',
         message: error instanceof Error ? error.message : 'Unable to update the user role.',
       })
+    },
+  })
+
+  const coursesQuery = useQuery({
+    queryKey: ['admin-courses'],
+    queryFn: async () => {
+      const response = await apiRequest<ApiResponse<AdminCourse[]>>('/admin/courses')
+      return response.data
+    },
+  })
+
+  const courseStatusMutation = useMutation({
+    mutationFn: async ({ courseId, status }: { courseId: number; status: CourseStatus }) => {
+      const response = await apiRequest<ApiResponse<CourseStatusResponse>>(`/admin/courses/${courseId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      return { response, status }
+    },
+    onSuccess: async ({ status }) => {
+      setCourseFeedback({ kind: 'success', message: `Course ${status === 'PUBLISHED' ? 'published' : 'returned to draft'} successfully.` })
+      setCourseStatusCandidate(null)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-courses'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-analytics'] }),
+      ])
+    },
+    onError: (error) => {
+      setCourseFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to update the course status.' })
     },
   })
 
@@ -377,6 +430,93 @@ function AdminDashboard() {
             </>
           )}
         </section>
+
+        <section className="mt-14" aria-labelledby="course-moderation-heading">
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Content oversight</p>
+            <h2 id="course-moderation-heading" className="mt-2 text-xl font-semibold sm:text-2xl">Course moderation</h2>
+            <p className="mt-1 text-sm text-slate-400">Review course details and publish courses or return them to draft.</p>
+          </div>
+
+          {courseFeedback && (
+            <div role={courseFeedback.kind === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl border px-4 py-3 text-sm ${courseFeedback.kind === 'success' ? 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-200' : 'border-red-400/20 bg-red-400/[0.07] text-red-200'}`}>
+              {courseFeedback.message}
+              <button type="button" onClick={() => setCourseFeedback(null)} className="ml-3 font-semibold underline underline-offset-2">Dismiss</button>
+            </div>
+          )}
+
+          {coursesQuery.isLoading && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading courses...</div>
+          )}
+          {coursesQuery.isError && (
+            <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.07] p-6 text-red-200">
+              <p>{coursesQuery.error instanceof Error ? coursesQuery.error.message : 'Unable to load courses.'}</p>
+              <button type="button" onClick={() => void coursesQuery.refetch()} className="mt-4 rounded-lg border border-red-300/30 px-4 py-2 text-sm font-medium hover:bg-red-400/10">Retry</button>
+            </div>
+          )}
+          {coursesQuery.data && (
+            <>
+              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search courses or educators</span>
+                  <input value={courseSearch} onChange={(event) => setCourseSearch(event.target.value)} type="search" placeholder="Course title, description, educator" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Course status</span>
+                  <select value={courseStatusFilter} onChange={(event) => setCourseStatusFilter(event.target.value as 'ALL' | CourseStatus)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none">
+                    <option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="PUBLISHED">Published</option>
+                  </select>
+                </label>
+              </div>
+
+              {coursesQuery.data.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <h3 className="font-semibold text-slate-100">No courses to review</h3>
+                  <p className="mt-1 text-sm text-slate-400">Courses will appear here when educators create them.</p>
+                </div>
+              ) : (() => {
+                const normalizedSearch = courseSearch.trim().toLocaleLowerCase()
+                const filteredCourses = coursesQuery.data.filter((course) => {
+                  const searchableText = `${course.title} ${course.description ?? ''} ${course.educator.name} ${course.educator.email}`.toLocaleLowerCase()
+                  return (!normalizedSearch || searchableText.includes(normalizedSearch)) && (courseStatusFilter === 'ALL' || course.status === courseStatusFilter)
+                })
+
+                return filteredCourses.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                    <h3 className="font-semibold text-slate-100">No matching courses</h3>
+                    <p className="mt-1 text-sm text-slate-400">Try changing the search or status filter.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredCourses.map((course) => (
+                      <article key={course.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <h3 className="min-w-0 break-words text-lg font-semibold text-slate-100">{course.title}</h3>
+                              <CourseStatusBadge status={course.status} />
+                            </div>
+                            <p className="mt-2 text-sm text-slate-400">Educator: <span className="font-medium text-slate-200">{course.educator.name}</span> <span className="break-all text-slate-500">({course.educator.email})</span></p>
+                            {course.description && <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-slate-300">{course.description}</p>}
+                            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
+                              <span>{course.moduleCount} {course.moduleCount === 1 ? 'module' : 'modules'}</span>
+                              <span>{course.enrollmentCount} {course.enrollmentCount === 1 ? 'enrollment' : 'enrollments'}</span>
+                              <span>Created {new Date(course.createdAt).toLocaleDateString()}</span>
+                              <span>Updated {new Date(course.updatedAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => { setCourseFeedback(null); courseStatusMutation.reset(); setCourseStatusCandidate({ course, status: course.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' }) }} disabled={courseStatusMutation.isPending} className={`shrink-0 self-start rounded-lg border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${course.status === 'PUBLISHED' ? 'border-amber-400/25 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15' : 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/15'}`}>
+                            {course.status === 'PUBLISHED' ? 'Return to draft' : 'Publish course'}
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )
+              })()}
+            </>
+          )}
+        </section>
       </main>
 
       {rejectionCandidate && (
@@ -412,6 +552,21 @@ function AdminDashboard() {
             <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row">
               <button type="button" autoFocus onClick={() => setRoleChangeCandidate(null)} disabled={roleUpdateMutation.isPending} className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
               <button type="button" onClick={() => roleUpdateMutation.mutate({ userId: roleChangeCandidate.user.id, role: roleChangeCandidate.role })} disabled={roleUpdateMutation.isPending} className="rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-4 py-2.5 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/25 disabled:cursor-wait disabled:opacity-50">{roleUpdateMutation.isPending ? 'Updating...' : 'Confirm role change'}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {courseStatusCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === 'Escape' && !courseStatusMutation.isPending) setCourseStatusCandidate(null) }} onMouseDown={(event) => { if (event.target === event.currentTarget && !courseStatusMutation.isPending) setCourseStatusCandidate(null) }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="course-status-heading" aria-describedby="course-status-description" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50 sm:p-7">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Confirm moderation action</p>
+            <h2 id="course-status-heading" className="mt-3 text-xl font-bold text-white">{courseStatusCandidate.status === 'PUBLISHED' ? 'Publish this course?' : 'Return this course to draft?'}</h2>
+            <p id="course-status-description" className="mt-3 break-words text-sm leading-6 text-slate-300">{courseStatusCandidate.status === 'PUBLISHED' ? 'Publishing' : 'Returning to draft'} “{courseStatusCandidate.course.title}” will update its availability to students.</p>
+            {courseStatusMutation.isError && <p role="alert" className="mt-4 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-sm text-red-200">{courseStatusMutation.error instanceof Error ? courseStatusMutation.error.message : 'Unable to update the course status.'}</p>}
+            <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row">
+              <button type="button" autoFocus onClick={() => setCourseStatusCandidate(null)} disabled={courseStatusMutation.isPending} className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => courseStatusMutation.mutate({ courseId: courseStatusCandidate.course.id, status: courseStatusCandidate.status })} disabled={courseStatusMutation.isPending} className="rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-4 py-2.5 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/25 disabled:cursor-wait disabled:opacity-50">{courseStatusMutation.isPending ? 'Updating...' : 'Confirm status change'}</button>
             </div>
           </section>
         </div>
@@ -458,6 +613,14 @@ function StatusBadge({ status }: { status: EducatorApplication['educatorApproval
   const label = status === 'NOT_APPLICABLE' ? 'Not applicable' : status[0] + status.slice(1).toLowerCase()
 
   return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${styles[status]}`}>{label}</span>
+}
+
+function CourseStatusBadge({ status }: { status: CourseStatus }) {
+  const styles = status === 'PUBLISHED'
+    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+    : 'border-slate-700 bg-slate-800 text-slate-300'
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${styles}`}>{status === 'PUBLISHED' ? 'Published' : 'Draft'}</span>
 }
 
 export default AdminDashboard
