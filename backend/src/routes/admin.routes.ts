@@ -77,24 +77,6 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
         })
       }
 
-      const user = await prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-        include: {
-          roles: {
-            include: { role: true },
-          },
-        },
-      })
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found',
-        })
-      }
-
       const selectedRole = await prisma.role.findUnique({
         where: {
           name: normalizedRole,
@@ -108,45 +90,76 @@ router.patch('/users/:id/role',authenticateToken,requireRole('ADMIN'),async (req
         })
       }
 
-      const isAlreadyEducator = user.roles.some(
-        (userRole) => userRole.role.name === 'EDUCATOR',
-      )
-      const educatorApprovalStatus =
-        normalizedRole === 'EDUCATOR'
-          ? isAlreadyEducator
-            ? user.educatorApprovalStatus
-            : 'PENDING'
-          : 'NOT_APPLICABLE'
+      const result = await prisma.$transaction(async (tx) => {
+        // Lock the user row so concurrent role updates serialize before checking
+        // whether this account is an administrator.
+        const lockedUsers = await tx.$queryRaw<Array<{ id: number }>>`
+          SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE
+        `
 
-      await prisma.$transaction(async (tx) => {
+        if (lockedUsers.length === 0) {
+          return { kind: 'not-found' as const }
+        }
+
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          include: { roles: { include: { role: true } } },
+        })
+
+        if (!user) {
+          return { kind: 'not-found' as const }
+        }
+
+        if (user.roles.some((userRole) => userRole.role.name === 'ADMIN')) {
+          return { kind: 'admin-account' as const }
+        }
+
+        const isAlreadyEducator = user.roles.some(
+          (userRole) => userRole.role.name === 'EDUCATOR',
+        )
+        const educatorApprovalStatus =
+          normalizedRole === 'EDUCATOR'
+            ? isAlreadyEducator
+              ? user.educatorApprovalStatus
+              : 'PENDING'
+            : 'NOT_APPLICABLE'
+
         await tx.userRole.deleteMany({
-            where: {
-            userId,
-            },
+          where: { userId },
         })
 
         await tx.userRole.create({
-            data: {
-            userId,
-            roleId: selectedRole.id,
-            },
+          data: { userId, roleId: selectedRole.id },
         })
 
         await tx.user.update({
           where: { id: userId },
           data: { educatorApprovalStatus },
         })
+
+        return { kind: 'updated' as const, user, educatorApprovalStatus }
+      })
+
+      if (result.kind === 'not-found') {
+        return res.status(404).json({ success: false, message: 'User not found' })
+      }
+
+      if (result.kind === 'admin-account') {
+        return res.status(403).json({
+          success: false,
+          message: 'Administrator roles cannot be changed',
         })
+      }
 
       return res.json({
         success: true,
         message: 'User role updated successfully',
         data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
           role: normalizedRole,
-          educatorApprovalStatus,
+          educatorApprovalStatus: result.educatorApprovalStatus,
         },
       })
     } catch (error) {

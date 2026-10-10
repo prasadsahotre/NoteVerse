@@ -24,6 +24,16 @@ interface EducatorApplication {
   educatorApprovalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NOT_APPLICABLE'
 }
 
+interface AdminUser {
+  id: number
+  name: string
+  email: string
+  roles: string[]
+  createdAt: string
+  updatedAt: string
+  educatorApprovalStatus: EducatorApplication['educatorApprovalStatus']
+}
+
 interface ApiResponse<T> {
   success: boolean
   message?: string
@@ -35,12 +45,29 @@ interface ReviewVariables {
   status: 'APPROVED' | 'REJECTED'
 }
 
+interface RoleUpdateVariables {
+  userId: number
+  role: 'STUDENT' | 'EDUCATOR'
+}
+
+interface RoleUpdateResponse {
+  id: number
+  name: string
+  email: string
+  role: 'STUDENT' | 'EDUCATOR'
+  educatorApprovalStatus: EducatorApplication['educatorApprovalStatus']
+}
+
 function AdminDashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [rejectionCandidate, setRejectionCandidate] = useState<EducatorApplication | null>(null)
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL')
+  const [userStatusFilter, setUserStatusFilter] = useState('ALL')
+  const [roleChangeCandidate, setRoleChangeCandidate] = useState<{ user: AdminUser; role: RoleUpdateVariables['role'] } | null>(null)
 
   const analyticsQuery = useQuery({
     queryKey: ['admin-analytics'],
@@ -55,6 +82,39 @@ function AdminDashboard() {
     queryFn: async () => {
       const response = await apiRequest<ApiResponse<EducatorApplication[]>>('/admin/educator-applications')
       return response.data
+    },
+  })
+
+  const usersQuery = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const response = await apiRequest<ApiResponse<AdminUser[]>>('/admin/users')
+      return response.data
+    },
+  })
+
+  const roleUpdateMutation = useMutation({
+    mutationFn: async ({ userId, role }: RoleUpdateVariables) => {
+      const response = await apiRequest<ApiResponse<RoleUpdateResponse>>(`/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      })
+      return { response, role }
+    },
+    onSuccess: async ({ role }) => {
+      setFeedback({ kind: 'success', message: `User role updated to ${role.toLowerCase()}.` })
+      setRoleChangeCandidate(null)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-analytics'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-educator-applications'] }),
+      ])
+    },
+    onError: (error) => {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Unable to update the user role.',
+      })
     },
   })
 
@@ -225,6 +285,98 @@ function AdminDashboard() {
             </div>
           )}
         </section>
+
+        <section className="mt-14" aria-labelledby="user-management-heading">
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Platform accounts</p>
+            <h2 id="user-management-heading" className="mt-2 text-xl font-semibold sm:text-2xl">User management</h2>
+            <p className="mt-1 text-sm text-slate-400">Search accounts and manage student or educator roles.</p>
+          </div>
+
+          {usersQuery.isLoading && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading users...</div>
+          )}
+          {usersQuery.isError && (
+            <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.07] p-6 text-red-200">
+              <p>{usersQuery.error instanceof Error ? usersQuery.error.message : 'Unable to load users.'}</p>
+              <button type="button" onClick={() => void usersQuery.refetch()} className="mt-4 rounded-lg border border-red-300/30 px-4 py-2 text-sm font-medium hover:bg-red-400/10">Retry</button>
+            </div>
+          )}
+          {usersQuery.data && (
+            <>
+              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="sm:col-span-2 lg:col-span-1">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search name or email</span>
+                  <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} type="search" placeholder="Search users" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Role</span>
+                  <select value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none">
+                    <option value="ALL">All roles</option><option value="STUDENT">Student</option><option value="EDUCATOR">Educator</option><option value="ADMIN">Administrator</option>
+                  </select>
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Educator status</span>
+                  <select value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none">
+                    <option value="ALL">All statuses</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="NOT_APPLICABLE">Not applicable</option>
+                  </select>
+                </label>
+              </div>
+
+              {usersQuery.data.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <h3 className="font-semibold text-slate-100">No users yet</h3>
+                  <p className="mt-1 text-sm text-slate-400">Registered accounts will appear here.</p>
+                </div>
+              ) : (() => {
+                const normalizedSearch = userSearch.trim().toLocaleLowerCase()
+                const filteredUsers = usersQuery.data.filter((user) => {
+                  const matchesSearch = !normalizedSearch || user.name.toLocaleLowerCase().includes(normalizedSearch) || user.email.toLocaleLowerCase().includes(normalizedSearch)
+                  const matchesRole = userRoleFilter === 'ALL' || user.roles.includes(userRoleFilter)
+                  const matchesStatus = userStatusFilter === 'ALL' || user.educatorApprovalStatus === userStatusFilter
+                  return matchesSearch && matchesRole && matchesStatus
+                })
+
+                return filteredUsers.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                    <h3 className="font-semibold text-slate-100">No matching users</h3>
+                    <p className="mt-1 text-sm text-slate-400">Try changing the search or filters.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+                    <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(100px,0.7fr)_minmax(130px,0.8fr)_minmax(180px,1fr)] gap-4 border-b border-slate-800 bg-slate-800/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-300 lg:grid">
+                      <span>Name</span><span>Email</span><span>Role</span><span>Educator status</span><span className="text-right">Role action</span>
+                    </div>
+                    <div className="divide-y divide-slate-800">
+                      {filteredUsers.map((user) => {
+                        const role = user.roles[0] ?? 'UNKNOWN'
+                        const isAdmin = user.roles.includes('ADMIN')
+                        const nextRole = role === 'EDUCATOR' ? 'STUDENT' : 'EDUCATOR'
+                        return (
+                          <article key={user.id} className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(100px,0.7fr)_minmax(130px,0.8fr)_minmax(180px,1fr)] lg:items-center">
+                            <div className="min-w-0"><p className="truncate font-semibold text-slate-100" title={user.name}>{user.name}</p></div>
+                            <p className="break-all text-sm text-slate-300">{user.email}</p>
+                            <div><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${role === 'ADMIN' ? 'border-violet-400/20 bg-violet-400/10 text-violet-200' : role === 'EDUCATOR' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200' : 'border-indigo-400/20 bg-indigo-400/10 text-indigo-200'}`}>{role === 'ADMIN' ? 'Administrator' : role === 'EDUCATOR' ? 'Educator' : 'Student'}</span></div>
+                            <div>{user.roles.includes('EDUCATOR') ? <StatusBadge status={user.educatorApprovalStatus} /> : <span className="text-sm text-slate-500">—</span>}</div>
+                            <div className="lg:text-right">
+                              {isAdmin ? (
+                                <p className="text-xs leading-5 text-slate-400">Administrator roles cannot be changed through this interface.</p>
+                              ) : (
+                                <button type="button" onClick={() => { setFeedback(null); roleUpdateMutation.reset(); setRoleChangeCandidate({ user, role: nextRole }) }} disabled={roleUpdateMutation.isPending} className="rounded-lg border border-indigo-400/25 bg-indigo-400/10 px-3 py-2 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-400/15 disabled:cursor-not-allowed disabled:opacity-50">
+                                  Change to {nextRole === 'STUDENT' ? 'Student' : 'Educator'}
+                                </button>
+                              )}
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </>
+          )}
+        </section>
       </main>
 
       {rejectionCandidate && (
@@ -245,6 +397,21 @@ function AdminDashboard() {
               <button type="button" onClick={() => reviewMutation.mutate({ applicantId: rejectionCandidate.id, status: 'REJECTED' })} disabled={reviewMutation.isPending} className="rounded-lg border border-red-400/30 bg-red-500/15 px-4 py-2.5 text-sm font-semibold text-red-100 hover:bg-red-500/25 disabled:cursor-wait disabled:opacity-50">
                 {reviewMutation.isPending ? 'Rejecting...' : 'Confirm rejection'}
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {roleChangeCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === 'Escape' && !roleUpdateMutation.isPending) setRoleChangeCandidate(null) }} onMouseDown={(event) => { if (event.target === event.currentTarget && !roleUpdateMutation.isPending) setRoleChangeCandidate(null) }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="role-change-heading" aria-describedby="role-change-description" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50 sm:p-7">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Confirm role change</p>
+            <h2 id="role-change-heading" className="mt-3 text-xl font-bold text-white">Change user role?</h2>
+            <p id="role-change-description" className="mt-3 text-sm leading-6 text-slate-300">Change {roleChangeCandidate.user.name} from {roleChangeCandidate.user.roles[0]?.toLowerCase()} to {roleChangeCandidate.role.toLowerCase()}? Educator accounts will require approval before authoring.</p>
+            {roleUpdateMutation.isError && <p role="alert" className="mt-4 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-sm text-red-200">{roleUpdateMutation.error instanceof Error ? roleUpdateMutation.error.message : 'Unable to update the user role.'}</p>}
+            <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row">
+              <button type="button" autoFocus onClick={() => setRoleChangeCandidate(null)} disabled={roleUpdateMutation.isPending} className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => roleUpdateMutation.mutate({ userId: roleChangeCandidate.user.id, role: roleChangeCandidate.role })} disabled={roleUpdateMutation.isPending} className="rounded-lg border border-indigo-400/30 bg-indigo-500/15 px-4 py-2.5 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/25 disabled:cursor-wait disabled:opacity-50">{roleUpdateMutation.isPending ? 'Updating...' : 'Confirm role change'}</button>
             </div>
           </section>
         </div>
