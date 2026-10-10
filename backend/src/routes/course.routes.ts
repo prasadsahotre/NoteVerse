@@ -213,6 +213,45 @@ router.get('/educator/:educatorId', async (req, res) => {
   }
 })
 
+router.get(
+  '/mine',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const courses = await prisma.course.findMany({
+        where: {
+          educatorId: req.user!.userId,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      })
+
+      return res.json({
+        success: true,
+        data: courses,
+      })
+    } catch (error) {
+      console.error("Failed to fetch educator's courses:", error)
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch educator's courses",
+      })
+    }
+  },
+)
+
 router.get('/:id', async (req, res) => {
   try {
     const courseId = Number(req.params.id)
@@ -498,6 +537,68 @@ router.patch(
   },
 )
 
+router.patch(
+  '/:id/unpublish',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.id)
+
+      if (!Number.isInteger(courseId) || courseId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const existingCourse = await prisma.course.findUnique({
+        where: { id: courseId },
+      })
+
+      if (!existingCourse) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      if (existingCourse.educatorId !== req.user!.userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only unpublish your own course',
+        })
+      }
+
+      if (existingCourse.status !== 'PUBLISHED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Course is already a draft',
+        })
+      }
+
+      const course = await prisma.course.update({
+        where: { id: courseId },
+        data: { status: 'DRAFT' },
+      })
+
+      return res.json({
+        success: true,
+        message: 'Course unpublished successfully',
+        data: course,
+      })
+    } catch (error) {
+      console.error('Failed to unpublish course:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to unpublish course',
+      })
+    }
+  },
+)
+
 router.delete(
   '/:id',
   authenticateToken,
@@ -516,36 +617,54 @@ router.delete(
 
       const educatorId = req.user!.userId
 
-      const existingCourse = await prisma.course.findUnique({
-        where: {
-          id: courseId,
+      const result = await prisma.$transaction(
+        async (transaction) => {
+          const course = await transaction.course.findUnique({
+            where: { id: courseId },
+            select: {
+              id: true,
+              educatorId: true,
+              _count: {
+                select: {
+                  modules: true,
+                  enrollments: true,
+                  reviews: true,
+                  certificates: true,
+                  reports: true,
+                },
+              },
+            },
+          })
+
+          if (!course) return 'not-found' as const
+          if (course.educatorId !== educatorId) return 'forbidden' as const
+
+          const hasRelatedData = Object.values(course._count).some((count) => count > 0)
+          if (hasRelatedData) return 'has-related-data' as const
+
+          await transaction.course.delete({ where: { id: courseId } })
+          return 'deleted' as const
         },
-      })
+        { isolationLevel: 'Serializable' },
+      )
 
-      if (!existingCourse) {
-        return res.status(404).json({
-          success: false,
-          message: 'Course not found',
-        })
+      if (result === 'not-found') {
+        return res.status(404).json({ success: false, message: 'Course not found' })
       }
-
-      if (existingCourse.educatorId !== educatorId) {
+      if (result === 'forbidden') {
         return res.status(403).json({
           success: false,
           message: 'You can only delete your own course',
         })
       }
+      if (result === 'has-related-data') {
+        return res.status(409).json({
+          success: false,
+          message: 'This course has content or related records and cannot be deleted. Unpublish it instead.',
+        })
+      }
 
-      await prisma.course.delete({
-        where: {
-          id: courseId,
-        },
-      })
-
-      res.json({
-        success: true,
-        message: 'Course deleted successfully',
-      })
+      return res.json({ success: true, message: 'Course deleted successfully' })
     } catch (error) {
       console.error('Failed to delete course:', error)
 

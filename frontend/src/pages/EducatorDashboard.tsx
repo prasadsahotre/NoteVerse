@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
 import { useNavigate } from 'react-router-dom'
@@ -38,9 +38,38 @@ interface EducatorAnalyticsResponse {
   }
 }
 
+interface EducatorCourse {
+  id: number
+  title: string
+  description: string | null
+  status: 'DRAFT' | 'PUBLISHED'
+  createdAt: string
+  updatedAt: string
+}
+
+interface CoursesResponse {
+  success: boolean
+  data: EducatorCourse[]
+}
+
+interface CourseMutationResponse {
+  success: boolean
+  message: string
+  data: EducatorCourse
+}
+
 function EducatorDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [editingCourseId, setEditingCourseId] = useState<number | null>(null)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [formError, setFormError] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const isApprovedEducator = Boolean(
+    user?.id && user.educatorApprovalStatus === 'APPROVED',
+  )
 
   const analyticsQuery = useQuery({
     queryKey: ['educator-analytics', user?.id],
@@ -54,6 +83,153 @@ function EducatorDashboard() {
       user?.id && user.educatorApprovalStatus === 'APPROVED',
     ),
   })
+
+  const coursesQuery = useQuery({
+    queryKey: ['educator-courses', user?.id],
+    queryFn: async () => {
+      const response = await apiRequest<CoursesResponse>('/courses/mine')
+      return response.data
+    },
+    enabled: isApprovedEducator,
+  })
+
+  const refreshCourseData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['educator-courses', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['educator-analytics', user?.id] }),
+    ])
+  }
+
+  const createCourseMutation = useMutation({
+    mutationFn: (values: { title: string; description: string }) =>
+      apiRequest<CourseMutationResponse>('/courses', {
+        method: 'POST',
+        body: JSON.stringify(values),
+      }),
+    onSuccess: async (response) => {
+      setFeedback(response.message || 'Course created successfully.')
+      setTitle('')
+      setDescription('')
+      setFormError('')
+      await refreshCourseData()
+    },
+  })
+
+  const updateCourseMutation = useMutation({
+    mutationFn: ({ id, ...values }: { id: number; title: string; description: string }) =>
+      apiRequest<CourseMutationResponse>(`/courses/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(values),
+      }),
+    onSuccess: async (response) => {
+      setFeedback(response.message || 'Course updated successfully.')
+      setEditingCourseId(null)
+      setFormError('')
+      await refreshCourseData()
+    },
+  })
+
+  const publishCourseMutation = useMutation({
+    mutationFn: (courseId: number) =>
+      apiRequest<CourseMutationResponse>(`/courses/${courseId}/publish`, {
+        method: 'PATCH',
+      }),
+    onSuccess: async (response) => {
+      setFeedback(response.message || 'Course published successfully.')
+      await refreshCourseData()
+    },
+  })
+
+  const unpublishCourseMutation = useMutation({
+    mutationFn: (courseId: number) =>
+      apiRequest<CourseMutationResponse>(`/courses/${courseId}/unpublish`, {
+        method: 'PATCH',
+      }),
+    onSuccess: async (response) => {
+      setFeedback(response.message || 'Course unpublished successfully.')
+      await refreshCourseData()
+    },
+  })
+
+  const deleteCourseMutation = useMutation({
+    mutationFn: (courseId: number) =>
+      apiRequest<{ success: boolean; message: string }>(`/courses/${courseId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: async (response, courseId) => {
+      setFeedback(response.message || 'Course deleted successfully.')
+      if (editingCourseId === courseId) cancelCourseEdit()
+      await refreshCourseData()
+    },
+  })
+
+  const handleCourseSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFormError('')
+    setFeedback('')
+    createCourseMutation.reset()
+    updateCourseMutation.reset()
+
+    const trimmedTitle = title.trim()
+    if (!trimmedTitle) {
+      setFormError('Enter a course title to continue.')
+      return
+    }
+
+    const values = { title: trimmedTitle, description: description.trim() }
+    if (editingCourseId !== null) {
+      updateCourseMutation.mutate({ id: editingCourseId, ...values })
+    } else {
+      createCourseMutation.mutate(values)
+    }
+  }
+
+  const startEditingCourse = (course: EducatorCourse) => {
+    createCourseMutation.reset()
+    updateCourseMutation.reset()
+    setEditingCourseId(course.id)
+    setTitle(course.title)
+    setDescription(course.description ?? '')
+    setFormError('')
+    setFeedback('')
+  }
+
+  const cancelCourseEdit = () => {
+    setEditingCourseId(null)
+    setTitle('')
+    setDescription('')
+    setFormError('')
+  }
+
+  const publishCourse = (course: EducatorCourse) => {
+    const confirmed = window.confirm(
+      `Publish “${course.title}”? It will become visible in course discovery.`,
+    )
+    if (!confirmed) return
+    setFeedback('')
+    publishCourseMutation.reset()
+    publishCourseMutation.mutate(course.id)
+  }
+
+  const unpublishCourse = (course: EducatorCourse) => {
+    const confirmed = window.confirm(
+      `Unpublish “${course.title}”? It will be removed from course discovery. Students already enrolled can continue learning.`,
+    )
+    if (!confirmed) return
+    setFeedback('')
+    unpublishCourseMutation.reset()
+    unpublishCourseMutation.mutate(course.id)
+  }
+
+  const deleteCourse = (course: EducatorCourse) => {
+    const confirmed = window.confirm(
+      `Delete “${course.title}”? This permanently removes the course. Deletion is allowed only when it has no modules, enrollments, reviews, certificates, or reports. Courses with related records must be unpublished instead.`,
+    )
+    if (!confirmed) return
+    setFeedback('')
+    deleteCourseMutation.reset()
+    deleteCourseMutation.mutate(course.id)
+  }
 
   const handleLogout = () => {
     logout()
@@ -108,6 +284,165 @@ function EducatorDashboard() {
             Logout
           </button>
         </header>
+
+        <section aria-labelledby="my-courses-heading" className="mt-10">
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Course workspace</p>
+            <h2 id="my-courses-heading" className="mt-2 text-2xl font-bold tracking-tight">My Courses</h2>
+            <p className="mt-1 text-sm text-slate-400">Create and update your course details, then publish a draft when it is ready.</p>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
+            <form onSubmit={handleCourseSubmit} className="h-fit rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+              <h3 className="text-lg font-semibold text-white">
+                {editingCourseId === null ? 'Create a course' : 'Edit course'}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {editingCourseId === null ? 'New courses start as drafts.' : 'Update the course title and description.'}
+              </p>
+
+              <label htmlFor="course-title" className="mt-5 block text-sm font-medium text-slate-200">Course title</label>
+              <input
+                id="course-title"
+                name="title"
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+                placeholder="e.g. Foundations of Guitar"
+              />
+
+              <label htmlFor="course-description" className="mt-4 block text-sm font-medium text-slate-200">Description <span className="font-normal text-slate-500">(optional)</span></label>
+              <textarea
+                id="course-description"
+                name="description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={5}
+                className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+                placeholder="Describe what students will learn."
+              />
+
+              {formError && <p role="alert" className="mt-3 text-sm text-red-300">{formError}</p>}
+              {(createCourseMutation.isError || updateCourseMutation.isError) && (
+                <p role="alert" className="mt-3 text-sm text-red-300">
+                  {(createCourseMutation.error ?? updateCourseMutation.error) instanceof Error
+                    ? (createCourseMutation.error ?? updateCourseMutation.error)?.message
+                    : 'Unable to save this course. Please try again.'}
+                </p>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  disabled={createCourseMutation.isPending || updateCourseMutation.isPending}
+                  className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {createCourseMutation.isPending || updateCourseMutation.isPending
+                    ? 'Saving…'
+                    : editingCourseId === null ? 'Create draft' : 'Save changes'}
+                </button>
+                {editingCourseId !== null && (
+                  <button type="button" onClick={cancelCourseEdit} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-slate-800">
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div aria-live="polite" className="min-w-0">
+              {feedback && <p role="status" className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-200">{feedback}</p>}
+              {publishCourseMutation.isError && (
+                <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/[0.07] px-4 py-3 text-sm text-red-300">
+                  {publishCourseMutation.error instanceof Error ? publishCourseMutation.error.message : 'Unable to publish this course.'}
+                </p>
+              )}
+              {unpublishCourseMutation.isError && (
+                <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/[0.07] px-4 py-3 text-sm text-red-300">
+                  {unpublishCourseMutation.error instanceof Error ? unpublishCourseMutation.error.message : 'Unable to unpublish this course.'}
+                </p>
+              )}
+              {deleteCourseMutation.isError && (
+                <p role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-400/[0.07] px-4 py-3 text-sm text-red-300">
+                  {deleteCourseMutation.error instanceof Error ? deleteCourseMutation.error.message : 'Unable to delete this course.'}
+                </p>
+              )}
+
+              {coursesQuery.isLoading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading your courses…</div>}
+              {coursesQuery.isError && (
+                <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.07] p-6 text-red-200">
+                  <p>{coursesQuery.error instanceof Error ? coursesQuery.error.message : 'Unable to load your courses.'}</p>
+                  <button type="button" onClick={() => void coursesQuery.refetch()} className="mt-4 rounded-xl border border-red-300/30 px-4 py-2 text-sm font-medium hover:bg-red-400/10">Try again</button>
+                </div>
+              )}
+              {coursesQuery.data && coursesQuery.data.length === 0 && (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <p className="font-medium text-slate-200">Your course workspace is ready.</p>
+                  <p className="mt-2 text-sm text-slate-400">Create your first draft using the form.</p>
+                </div>
+              )}
+              {coursesQuery.data && coursesQuery.data.length > 0 && (
+                <div className="space-y-3">
+                  {coursesQuery.data.map((course) => (
+                    <article key={course.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+                      {editingCourseId === course.id ? (
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Editing this course</p>
+                      ) : null}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 title={course.title} className="break-words text-lg font-semibold text-white">{course.title}</h3>
+                          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{course.description || 'No description provided.'}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${course.status === 'PUBLISHED' ? 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/20' : 'bg-slate-700/60 text-slate-300 ring-1 ring-white/10'}`}>
+                          {course.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-white/[0.06] pt-3 text-xs text-slate-400">
+                        <span>Created <time dateTime={course.createdAt}>{new Date(course.createdAt).toLocaleDateString()}</time></span>
+                        <span>Updated <time dateTime={course.updatedAt}>{new Date(course.updatedAt).toLocaleDateString()}</time></span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button type="button" onClick={() => startEditingCourse(course)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800">Edit details</button>
+                        {course.status === 'DRAFT' && (
+                          <button
+                            type="button"
+                            onClick={() => publishCourse(course)}
+                            disabled={publishCourseMutation.isPending}
+                            className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {publishCourseMutation.isPending ? 'Publishing…' : 'Publish course'}
+                          </button>
+                        )}
+                        {course.status === 'PUBLISHED' && (
+                          <button
+                            type="button"
+                            onClick={() => unpublishCourse(course)}
+                            disabled={unpublishCourseMutation.isPending}
+                            className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {unpublishCourseMutation.isPending ? 'Unpublishing…' : 'Unpublish course'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => deleteCourse(course)}
+                          disabled={deleteCourseMutation.isPending}
+                          className="rounded-xl border border-red-400/30 bg-red-400/[0.07] px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deleteCourseMutation.isPending ? 'Deleting…' : 'Delete course'}
+                        </button>
+                      </div>
+                      <p className="mt-3 text-xs leading-5 text-slate-500">
+                        Deletion is available only for courses with no modules or related student/platform records. Unpublish a course to keep its learning history.
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         {analyticsQuery.isLoading && (
           <div className="mt-10 rounded-3xl border border-white/10 bg-slate-900/70 p-10 text-center text-slate-400 shadow-xl shadow-black/10">
