@@ -37,6 +37,22 @@ interface EnrollmentResponse {
   }
 }
 
+interface CourseReviewsResponse {
+  success: boolean
+  data: {
+    courseId: number
+    totalReviews: number
+    averageRating: number
+    reviews: {
+      id: number
+      rating: number
+      review: string | null
+      createdAt: string
+      user: { id: number; name: string }
+    }[]
+  }
+}
+
 function StudentCoursePreviewPage() {
   const { courseId } = useParams()
   const { user } = useAuth()
@@ -53,6 +69,17 @@ function StudentCoursePreviewPage() {
         `/courses/${courseIdNumber}`,
       )
 
+      return response.data
+    },
+    enabled: isValidCourseId,
+  })
+
+  const reviewsQuery = useQuery({
+    queryKey: ['course-reviews', courseIdNumber],
+    queryFn: async () => {
+      const response = await apiRequest<CourseReviewsResponse>(
+        `/course-reviews/course/${courseIdNumber}`,
+      )
       return response.data
     },
     enabled: isValidCourseId,
@@ -214,6 +241,53 @@ function StudentCoursePreviewPage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section aria-labelledby="course-reviews-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">Student feedback</p>
+              <h2 id="course-reviews-heading" className="mt-1 text-2xl font-bold">Course reviews</h2>
+            </div>
+            {!reviewsQuery.isLoading && !reviewsQuery.isError && reviewsQuery.data && (
+              <p className="text-sm text-slate-300">
+                <span className="text-lg font-semibold text-amber-300">
+                  {reviewsQuery.data.totalReviews > 0
+                    ? `${reviewsQuery.data.averageRating.toFixed(2)} / 5`
+                    : 'No ratings yet'}
+                </span>
+                <span className="mx-2 text-slate-600">·</span>
+                {reviewsQuery.data.totalReviews} {reviewsQuery.data.totalReviews === 1 ? 'review' : 'reviews'}
+              </p>
+            )}
+          </div>
+
+          {reviewsQuery.isLoading && <p role="status" className="mt-5 text-sm text-slate-400">Loading reviews…</p>}
+          {reviewsQuery.isError && (
+            <div className="mt-5 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">
+              <p>{reviewsQuery.error instanceof Error ? reviewsQuery.error.message : 'Unable to load course reviews.'}</p>
+              <button type="button" onClick={() => void reviewsQuery.refetch()} className="mt-3 rounded-lg border border-red-200/30 px-3 py-2 font-medium hover:bg-red-300/10">Try again</button>
+            </div>
+          )}
+          {!reviewsQuery.isLoading && !reviewsQuery.isError && reviewsQuery.data?.reviews.length === 0 && (
+            <p className="mt-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">No reviews yet.</p>
+          )}
+          {reviewsQuery.data && reviewsQuery.data.reviews.length > 0 && (
+            <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+              {reviewsQuery.data.reviews.map((review) => (
+                <li key={review.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-slate-100">{review.user.name}</p>
+                    <p className="font-semibold text-amber-300" aria-label={`${review.rating} out of 5 stars`}>{review.rating} / 5</p>
+                  </div>
+                  {review.review && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{review.review}</p>}
+                  <time dateTime={review.createdAt} className="mt-3 block text-xs text-slate-500">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="mt-8">

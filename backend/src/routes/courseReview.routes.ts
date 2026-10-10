@@ -113,6 +113,18 @@ router.post(
         data: courseReview,
       })
     } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: 'You have already reviewed this course',
+        })
+      }
+
       console.error('Failed to create course review:', error)
 
       return res.status(500).json({
@@ -124,20 +136,86 @@ router.post(
 )
 
 // Get all reviews for a course
+router.get(
+  '/course/:courseId/mine',
+  authenticateToken,
+  requireRole('STUDENT'),
+  async (req: AuthRequest, res) => {
+    try {
+      const courseId = Number(req.params.courseId)
+
+      if (!Number.isInteger(courseId) || courseId < 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid course ID',
+        })
+      }
+
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true },
+      })
+
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: 'Course not found',
+        })
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId: req.user!.userId,
+            courseId,
+          },
+        },
+        select: { id: true },
+      })
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to view your review',
+        })
+      }
+
+      const review = await prisma.courseReview.findUnique({
+        where: {
+          userId_courseId: {
+            userId: req.user!.userId,
+            courseId,
+          },
+        },
+      })
+
+      return res.json({ success: true, data: review })
+    } catch (error) {
+      console.error('Failed to fetch student course review:', error)
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch your course review',
+      })
+    }
+  },
+)
+
 router.get('/course/:courseId', async (req, res) => {
   try {
     const courseId = Number(req.params.courseId)
 
-    if (Number.isNaN(courseId)) {
+    if (!Number.isInteger(courseId) || courseId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid course ID',
       })
     }
 
-    const course = await prisma.course.findUnique({
+    const course = await prisma.course.findFirst({
       where: {
         id: courseId,
+        status: 'PUBLISHED',
       },
     })
 
@@ -281,7 +359,7 @@ router.delete('/:id',authenticateToken,requireRole('STUDENT'),async (req: AuthRe
     const reviewId = Number(req.params.id)
     const userId = req.user!.userId
 
-    if (Number.isNaN(reviewId)) {
+    if (!Number.isInteger(reviewId) || reviewId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid review ID',

@@ -51,12 +51,32 @@ interface CertificateIssueResponse {
   data: { id: number }
 }
 
+interface MyCourseReviewResponse {
+  success: boolean
+  data: {
+    id: number
+    userId: number
+    courseId: number
+    rating: number
+    review: string | null
+    createdAt: string
+    updatedAt: string
+  } | null
+}
+
+interface ReviewInput {
+  rating: number
+  review: string
+}
+
 function StudentCoursePage() {
   const { courseId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [certificateFeedback, setCertificateFeedback] = useState('')
+  const [reviewFeedback, setReviewFeedback] = useState('')
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null)
 
   const courseIdNumber = Number(courseId)
 
@@ -109,6 +129,70 @@ function StudentCoursePage() {
     },
   })
 
+  const reviewsQuery = useQuery({
+    queryKey: ['course-review-mine', user?.id, courseIdNumber],
+    queryFn: async () => {
+      const response = await apiRequest<MyCourseReviewResponse>(
+        `/course-reviews/course/${courseIdNumber}/mine`,
+      )
+      return response.data
+    },
+    enabled: Boolean(user) && Number.isInteger(courseIdNumber) && courseIdNumber > 0,
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: async (input: ReviewInput & { reviewId?: number }) => {
+      if (input.reviewId) {
+        return apiRequest<{ success: boolean; message: string }>(
+          `/course-reviews/${input.reviewId}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ rating: input.rating, review: input.review.trim() || null }),
+          },
+        )
+      }
+      return apiRequest<{ success: boolean; message: string }>(
+        '/course-reviews',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            courseId: courseIdNumber,
+            rating: input.rating,
+            review: input.review.trim() || null,
+          }),
+        },
+      )
+    },
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['course-review-mine', user?.id, courseIdNumber] }),
+        queryClient.invalidateQueries({ queryKey: ['course-reviews', courseIdNumber] }),
+      ])
+      if (variables.reviewId) setEditingReviewId(null)
+      setReviewFeedback(variables.reviewId ? 'Your review was updated.' : 'Your review was submitted.')
+    },
+    onError: (mutationError) => {
+      setReviewFeedback(mutationError instanceof Error ? mutationError.message : 'Unable to save your review.')
+    },
+  })
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: async (reviewId: number) =>
+      apiRequest<{ success: boolean; message: string }>(`/course-reviews/${reviewId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['course-review-mine', user?.id, courseIdNumber] }),
+        queryClient.invalidateQueries({ queryKey: ['course-reviews', courseIdNumber] }),
+      ])
+      setReviewFeedback('Your review was deleted.')
+    },
+    onError: (mutationError) => {
+      setReviewFeedback(mutationError instanceof Error ? mutationError.message : 'Unable to delete your review.')
+    },
+  })
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -147,6 +231,8 @@ function StudentCoursePage() {
   if (!data) {
     return null
   }
+
+  const ownReview = reviewsQuery.data
 
   const handleStartLesson = (lessonId: number) => {
     if (!Number.isInteger(lessonId) || lessonId <= 0) {
@@ -245,6 +331,115 @@ function StudentCoursePage() {
           </div>
         </div>
 
+        <section aria-labelledby="your-review-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-7">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">Your feedback</p>
+              <h2 id="your-review-heading" className="mt-1 text-xl font-semibold">Course review</h2>
+            </div>
+          </div>
+          {reviewsQuery.isLoading && <p role="status" className="mt-4 text-sm text-slate-400">Loading your review…</p>}
+          {reviewsQuery.isError && (
+            <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">
+              <p>{reviewsQuery.error instanceof Error ? reviewsQuery.error.message : 'Unable to load reviews.'}</p>
+              <button type="button" onClick={() => void reviewsQuery.refetch()} className="mt-3 rounded-lg border border-red-200/30 px-3 py-2 font-medium hover:bg-red-300/10">Try again</button>
+            </div>
+          )}
+          {!reviewsQuery.isLoading && !reviewsQuery.isError && reviewsQuery.isSuccess && (
+            <>
+              {ownReview && (
+                editingReviewId === ownReview.id ? (
+                  <div>
+                    <ReviewEditor
+                      key={`${ownReview.id}-${ownReview.updatedAt}`}
+                      initialRating={ownReview.rating}
+                      initialReview={ownReview.review ?? ''}
+                      isPending={reviewMutation.isPending || deleteReviewMutation.isPending}
+                      submitLabel="Save changes"
+                      onSubmit={(input) => {
+                        setReviewFeedback('')
+                        reviewMutation.mutate({ ...input, reviewId: ownReview.id })
+                      }}
+                    />
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={reviewMutation.isPending || deleteReviewMutation.isPending}
+                        onClick={() => setEditingReviewId(null)}
+                        className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      <DeleteReviewButton
+                        isPending={reviewMutation.isPending || deleteReviewMutation.isPending}
+                        isDeleting={deleteReviewMutation.isPending}
+                        onDelete={() => {
+                          if (window.confirm('Delete your review for this course? This cannot be undone.')) {
+                            setReviewFeedback('')
+                            deleteReviewMutation.mutate(ownReview.id)
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-semibold text-amber-300" aria-label={`${ownReview.rating} out of 5 stars`}>
+                        {ownReview.rating} / 5
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={reviewMutation.isPending || deleteReviewMutation.isPending}
+                          onClick={() => setEditingReviewId(ownReview.id)}
+                          className="rounded-lg border border-indigo-400/40 px-3 py-2 text-sm font-medium text-indigo-200 transition hover:bg-indigo-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Edit review
+                        </button>
+                        <DeleteReviewButton
+                          isPending={reviewMutation.isPending || deleteReviewMutation.isPending}
+                          isDeleting={deleteReviewMutation.isPending}
+                          onDelete={() => {
+                            if (window.confirm('Delete your review for this course? This cannot be undone.')) {
+                              setReviewFeedback('')
+                              deleteReviewMutation.mutate(ownReview.id)
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {ownReview.review && (
+                      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{ownReview.review}</p>
+                    )}
+                    <time dateTime={ownReview.createdAt} className="mt-3 block text-xs text-slate-500">
+                      Reviewed {new Date(ownReview.createdAt).toLocaleDateString()}
+                    </time>
+                  </div>
+                )
+              )}
+              {!ownReview && (
+                <ReviewEditor
+                  key="new-review"
+                  initialRating=""
+                  initialReview=""
+                  isPending={reviewMutation.isPending || deleteReviewMutation.isPending}
+                  submitLabel="Submit review"
+                  onSubmit={(input) => {
+                    setReviewFeedback('')
+                    reviewMutation.mutate(input)
+                  }}
+                />
+              )}
+              {reviewFeedback && (
+                <p role={reviewMutation.isError || deleteReviewMutation.isError ? 'alert' : 'status'} className={`mt-3 text-sm ${reviewMutation.isError || deleteReviewMutation.isError ? 'text-red-300' : 'text-green-300'}`}>
+                  {reviewFeedback}
+                </p>
+              )}
+            </>
+          )}
+        </section>
+
         {/* Course Content */}
         <section className="mt-8">
           <h2 className="text-2xl font-bold">
@@ -321,6 +516,91 @@ function StudentCoursePage() {
         </section>
       </main>
     </div>
+  )
+}
+
+function DeleteReviewButton({
+  isPending,
+  isDeleting,
+  onDelete,
+}: {
+  isPending: boolean
+  isDeleting: boolean
+  onDelete: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={onDelete}
+      className="rounded-lg border border-red-400/30 px-3 py-2 text-sm font-medium text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {isDeleting ? 'Deleting…' : 'Delete review'}
+    </button>
+  )
+}
+
+function ReviewEditor({
+  initialRating,
+  initialReview,
+  isPending,
+  submitLabel,
+  onSubmit,
+}: {
+  initialRating: number | ''
+  initialReview: string
+  isPending: boolean
+  submitLabel: string
+  onSubmit: (input: ReviewInput) => void
+}) {
+  const [rating, setRating] = useState<number | ''>(initialRating)
+  const [review, setReview] = useState(initialReview)
+  const [validationError, setValidationError] = useState('')
+
+  return (
+    <form
+      className="mt-5 space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+          setValidationError('Choose a rating from 1 to 5.')
+          return
+        }
+        setValidationError('')
+        onSubmit({ rating, review })
+      }}
+    >
+      <div>
+        <label htmlFor="course-review-rating" className="mb-2 block text-sm font-medium text-slate-200">Your rating</label>
+        <select
+          id="course-review-rating"
+          value={rating}
+          onChange={(event) => setRating(event.target.value ? Number(event.target.value) : '')}
+          disabled={isPending}
+          required
+          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-indigo-400 sm:max-w-xs"
+        >
+          <option value="">Select a rating</option>
+          {[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value} / 5</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="course-review-text" className="mb-2 block text-sm font-medium text-slate-200">Written review <span className="font-normal text-slate-500">(optional)</span></label>
+        <textarea
+          id="course-review-text"
+          rows={4}
+          value={review}
+          onChange={(event) => setReview(event.target.value)}
+          disabled={isPending}
+          placeholder="Share what you found helpful about this course."
+          className="w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-indigo-400"
+        />
+      </div>
+      {validationError && <p role="alert" className="text-sm text-red-300">{validationError}</p>}
+      <button type="submit" disabled={isPending} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+        {isPending ? 'Saving review…' : submitLabel}
+      </button>
+    </form>
   )
 }
 
