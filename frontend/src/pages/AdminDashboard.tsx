@@ -78,6 +78,23 @@ interface CourseStatusResponse {
   status: CourseStatus
 }
 
+type ReportStatus = 'PENDING' | 'RESOLVED'
+
+interface AdminReport {
+  id: number
+  reason: string
+  description: string | null
+  status: ReportStatus
+  reporterId: number
+  courseId: number | null
+  lessonId: number | null
+  createdAt: string
+  resolvedAt: string | null
+  reporter: { id: number; name: string; email: string }
+  course: { id: number; title: string } | null
+  lesson: { id: number; title: string } | null
+}
+
 function AdminDashboard() {
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -92,6 +109,10 @@ function AdminDashboard() {
   const [courseStatusFilter, setCourseStatusFilter] = useState<'ALL' | CourseStatus>('ALL')
   const [courseStatusCandidate, setCourseStatusCandidate] = useState<{ course: AdminCourse; status: CourseStatus } | null>(null)
   const [courseFeedback, setCourseFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+  const [reportSearch, setReportSearch] = useState('')
+  const [reportStatusFilter, setReportStatusFilter] = useState<'ALL' | ReportStatus>('ALL')
+  const [reportCandidate, setReportCandidate] = useState<AdminReport | null>(null)
+  const [reportFeedback, setReportFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const analyticsQuery = useQuery({
     queryKey: ['admin-analytics'],
@@ -168,6 +189,29 @@ function AdminDashboard() {
     },
     onError: (error) => {
       setCourseFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to update the course status.' })
+    },
+  })
+
+  const reportsQuery = useQuery({
+    queryKey: ['admin-reports'],
+    queryFn: async () => {
+      const response = await apiRequest<ApiResponse<AdminReport[]>>('/admin/reports')
+      return response.data
+    },
+  })
+
+  const resolveReportMutation = useMutation({
+    mutationFn: async (reportId: number) => {
+      await apiRequest<ApiResponse<AdminReport>>(`/admin/reports/${reportId}`, { method: 'PATCH' })
+      return reportId
+    },
+    onSuccess: async () => {
+      setReportFeedback({ kind: 'success', message: 'Report resolved successfully.' })
+      setReportCandidate(null)
+      await queryClient.invalidateQueries({ queryKey: ['admin-reports'] })
+    },
+    onError: (error) => {
+      setReportFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Unable to resolve the report.' })
     },
   })
 
@@ -517,6 +561,102 @@ function AdminDashboard() {
             </>
           )}
         </section>
+
+        <section className="mt-14" aria-labelledby="reports-heading">
+          <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Community safety</p>
+              <h2 id="reports-heading" className="mt-2 text-xl font-semibold sm:text-2xl">Reports</h2>
+              <p className="mt-1 text-sm text-slate-400">Review student reports about courses and lessons.</p>
+            </div>
+            {reportsQuery.data && <span className="text-sm text-slate-400">{reportsQuery.data.filter((report) => report.status === 'PENDING').length} pending</span>}
+          </div>
+
+          {reportFeedback && (
+            <div role={reportFeedback.kind === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl border px-4 py-3 text-sm ${reportFeedback.kind === 'success' ? 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-200' : 'border-red-400/20 bg-red-400/[0.07] text-red-200'}`}>
+              {reportFeedback.message}
+              <button type="button" onClick={() => setReportFeedback(null)} className="ml-3 font-semibold underline underline-offset-2">Dismiss</button>
+            </div>
+          )}
+
+          {reportsQuery.isLoading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">Loading reports...</div>}
+          {reportsQuery.isError && (
+            <div role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/[0.07] p-6 text-red-200">
+              <p>{reportsQuery.error instanceof Error ? reportsQuery.error.message : 'Unable to load reports.'}</p>
+              <button type="button" onClick={() => void reportsQuery.refetch()} className="mt-4 rounded-lg border border-red-300/30 px-4 py-2 text-sm font-medium hover:bg-red-400/10">Retry</button>
+            </div>
+          )}
+          {reportsQuery.data && (
+            <>
+              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search reports</span>
+                  <input value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} type="search" placeholder="Reason, details, reporter, or content" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Status</span>
+                  <select value={reportStatusFilter} onChange={(event) => setReportStatusFilter(event.target.value as 'ALL' | ReportStatus)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:border-indigo-400 focus:outline-none">
+                    <option value="ALL">All reports</option><option value="PENDING">Pending</option><option value="RESOLVED">Resolved</option>
+                  </select>
+                </label>
+              </div>
+
+              {reportsQuery.data.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                  <h3 className="font-semibold text-slate-100">No reports received</h3>
+                  <p className="mt-1 text-sm text-slate-400">Submitted course or lesson reports will appear here.</p>
+                </div>
+              ) : (() => {
+                const normalizedSearch = reportSearch.trim().toLocaleLowerCase()
+                const filteredReports = reportsQuery.data.filter((report) => {
+                  const contentTitle = report.lesson?.title ?? report.course?.title ?? ''
+                  const targetType = report.lesson ? 'lesson' : report.course ? 'course' : ''
+                  const searchableText = `${report.reason} ${report.description ?? ''} ${report.reporter.name} ${report.reporter.email} ${contentTitle} ${targetType}`.toLocaleLowerCase()
+                  return (!normalizedSearch || searchableText.includes(normalizedSearch)) && (reportStatusFilter === 'ALL' || report.status === reportStatusFilter)
+                })
+
+                return filteredReports.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+                    <h3 className="font-semibold text-slate-100">No matching reports</h3>
+                    <p className="mt-1 text-sm text-slate-400">Try changing the search or status filter.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredReports.map((report) => {
+                      const target = report.lesson
+                        ? { type: 'Lesson', title: report.lesson.title }
+                        : report.course
+                          ? { type: 'Course', title: report.course.title }
+                          : null
+                      return (
+                        <article key={report.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <h3 className="break-words text-lg font-semibold text-slate-100">{report.reason}</h3>
+                                <ReportStatusBadge status={report.status} />
+                              </div>
+                              {target ? <p className="mt-2 break-words text-sm text-indigo-200">{target.type}: <span className="font-medium">{target.title}</span></p> : <p className="mt-2 text-sm text-slate-400">Reported content is no longer available.</p>}
+                              {report.description && <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-slate-300">{report.description}</p>}
+                              <div className="mt-4 flex flex-col gap-2 text-xs text-slate-400 sm:flex-row sm:flex-wrap sm:gap-x-5">
+                                <span>Reported by <span className="font-medium text-slate-200">{report.reporter.name}</span> <span className="break-all text-slate-500">({report.reporter.email})</span></span>
+                                <span>Submitted {new Date(report.createdAt).toLocaleString()}</span>
+                                {report.resolvedAt && <span>Resolved {new Date(report.resolvedAt).toLocaleString()}</span>}
+                              </div>
+                            </div>
+                            {report.status === 'PENDING' ? (
+                              <button type="button" onClick={() => { setReportFeedback(null); resolveReportMutation.reset(); setReportCandidate(report) }} disabled={resolveReportMutation.isPending} className="shrink-0 self-start rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50">Resolve report</button>
+                            ) : <span className="shrink-0 self-start text-sm text-slate-500">Reviewed</span>}
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </>
+          )}
+        </section>
       </main>
 
       {rejectionCandidate && (
@@ -571,6 +711,21 @@ function AdminDashboard() {
           </section>
         </div>
       )}
+
+      {reportCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === 'Escape' && !resolveReportMutation.isPending) setReportCandidate(null) }} onMouseDown={(event) => { if (event.target === event.currentTarget && !resolveReportMutation.isPending) setReportCandidate(null) }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="resolve-report-heading" aria-describedby="resolve-report-description" className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50 sm:p-7">
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Confirm report action</p>
+            <h2 id="resolve-report-heading" className="mt-3 text-xl font-bold text-white">Resolve this report?</h2>
+            <p id="resolve-report-description" className="mt-3 break-words text-sm leading-6 text-slate-300">Mark the report about “{reportCandidate.lesson?.title ?? reportCandidate.course?.title ?? reportCandidate.reason}” as resolved. This records the review status without changing or removing the reported content.</p>
+            {resolveReportMutation.isError && <p role="alert" className="mt-4 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-sm text-red-200">{resolveReportMutation.error instanceof Error ? resolveReportMutation.error.message : 'Unable to resolve the report.'}</p>}
+            <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row">
+              <button type="button" autoFocus onClick={() => setReportCandidate(null)} disabled={resolveReportMutation.isPending} className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={() => resolveReportMutation.mutate(reportCandidate.id)} disabled={resolveReportMutation.isPending} className="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-wait disabled:opacity-50">{resolveReportMutation.isPending ? 'Resolving...' : 'Confirm resolution'}</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
@@ -621,6 +776,14 @@ function CourseStatusBadge({ status }: { status: CourseStatus }) {
     : 'border-slate-700 bg-slate-800 text-slate-300'
 
   return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${styles}`}>{status === 'PUBLISHED' ? 'Published' : 'Draft'}</span>
+}
+
+function ReportStatusBadge({ status }: { status: ReportStatus }) {
+  const styles = status === 'PENDING'
+    ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+    : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${styles}`}>{status === 'PENDING' ? 'Pending' : 'Resolved'}</span>
 }
 
 export default AdminDashboard
