@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
@@ -11,6 +11,21 @@ interface CurriculumLesson {
   position: number
   moduleId: number
   youtubeVideoId: string | null
+}
+
+interface LessonQuestion {
+  id: number
+  lessonId: number
+  question: string
+  answer: string | null
+  answeredAt: string | null
+  createdAt: string
+  user: { id: number; name: string }
+}
+
+interface LessonQuestionsResponse {
+  success: boolean
+  data: LessonQuestion[]
 }
 
 interface CurriculumModule {
@@ -66,6 +81,9 @@ function EducatorCurriculumPage() {
   const [lessonPosition, setLessonPosition] = useState('1')
   const [validationError, setValidationError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({})
+  const [answerValidationErrors, setAnswerValidationErrors] = useState<Record<number, string>>({})
+  const [answerFeedback, setAnswerFeedback] = useState<{ questionId: number; message: string } | null>(null)
 
   const isApprovedEducator = user?.educatorApprovalStatus === 'APPROVED'
 
@@ -78,6 +96,20 @@ function EducatorCurriculumPage() {
       return response.data
     },
     enabled: Boolean(isApprovedEducator && validCourseId),
+  })
+
+  const lessonsForQuestions = curriculumQuery.data?.modules.flatMap((module) => module.lessons) ?? []
+  const lessonQuestionQueries = useQueries({
+    queries: lessonsForQuestions.map((lesson) => ({
+      queryKey: ['lesson-questions', user?.id, lesson.id],
+      queryFn: async () => {
+        const response = await apiRequest<LessonQuestionsResponse>(
+          `/lesson-questions/lesson/${lesson.id}`,
+        )
+        return response.data
+      },
+      enabled: Boolean(isApprovedEducator && curriculumQuery.isSuccess),
+    })),
   })
 
   const refreshCurriculum = async () => {
@@ -161,6 +193,29 @@ function EducatorCurriculumPage() {
       await refreshCurriculum()
     },
   })
+
+  const answerQuestionMutation = useMutation({
+    mutationFn: ({ questionId, answer }: { lessonId: number; questionId: number; answer: string }) =>
+      apiRequest<MutationResponse>(`/lesson-questions/${questionId}/answer`, {
+        method: 'PATCH',
+        body: JSON.stringify({ answer }),
+      }),
+    onSuccess: async (response, variables) => {
+      setAnswerFeedback({
+        questionId: variables.questionId,
+        message: response.message || 'Answer saved successfully.',
+      })
+      setAnswerValidationErrors((current) => ({ ...current, [variables.questionId]: '' }))
+      await queryClient.invalidateQueries({
+        queryKey: ['lesson-questions', user?.id, variables.lessonId],
+      })
+    },
+  })
+
+  const getQuestionsQueryForLesson = (lessonId: number) => {
+    const index = lessonsForQuestions.findIndex((lesson) => lesson.id === lessonId)
+    return index < 0 ? undefined : lessonQuestionQueries[index]
+  }
 
   const mutationError = [
     createModuleMutation.error,
@@ -432,6 +487,72 @@ function EducatorCurriculumPage() {
                                   </div>
                                 </>
                               )}
+
+                              {(() => {
+                                const questionsQuery = getQuestionsQueryForLesson(lesson.id)
+                                return (
+                                  <section aria-label={`Questions for ${lesson.title}`} className="mt-5 border-t border-slate-800 pt-4">
+                                    <h5 className="text-sm font-semibold text-indigo-200">Student questions</h5>
+                                    {questionsQuery?.isLoading && <p role="status" className="mt-3 text-sm text-slate-500">Loading lesson questions...</p>}
+                                    {questionsQuery?.isError && (
+                                      <div role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">
+                                        <p>{questionsQuery.error instanceof Error ? questionsQuery.error.message : 'Unable to load questions.'}</p>
+                                        <button type="button" onClick={() => void questionsQuery.refetch()} className="mt-2 underline hover:text-red-100">Try again</button>
+                                      </div>
+                                    )}
+                                    {questionsQuery?.data?.length === 0 && (
+                                      <p className="mt-3 text-sm text-slate-500">No student questions for this lesson yet.</p>
+                                    )}
+                                    {questionsQuery?.data && questionsQuery.data.length > 0 && (
+                                      <ol className="mt-3 space-y-3">
+                                        {questionsQuery.data.map((question) => (
+                                          <li key={question.id} className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                                              <span className="font-medium text-slate-300">{question.user.name}</span>
+                                              <time dateTime={question.createdAt}>{new Date(question.createdAt).toLocaleDateString()}</time>
+                                            </div>
+                                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{question.question}</p>
+                                            <form
+                                              className="mt-4"
+                                              onSubmit={(event) => {
+                                                event.preventDefault()
+                                                const answer = (answerDrafts[question.id] ?? question.answer ?? '').trim()
+                                                setAnswerFeedback(null)
+                                                if (!answer) {
+                                                  setAnswerValidationErrors((current) => ({ ...current, [question.id]: 'Enter an answer before saving.' }))
+                                                  return
+                                                }
+                                                setAnswerValidationErrors((current) => ({ ...current, [question.id]: '' }))
+                                                answerQuestionMutation.mutate({ lessonId: lesson.id, questionId: question.id, answer })
+                                              }}
+                                            >
+                                              <label htmlFor={`lesson-question-answer-${question.id}`} className="block text-xs font-medium text-slate-300">Educator answer</label>
+                                              <textarea
+                                                id={`lesson-question-answer-${question.id}`}
+                                                rows={3}
+                                                value={answerDrafts[question.id] ?? question.answer ?? ''}
+                                                onChange={(event) => setAnswerDrafts((current) => ({ ...current, [question.id]: event.target.value }))}
+                                                disabled={answerQuestionMutation.isPending}
+                                                className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm leading-6 text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 disabled:opacity-60"
+                                              />
+                                              {answerValidationErrors[question.id] && <p role="alert" className="mt-2 text-xs text-red-300">{answerValidationErrors[question.id]}</p>}
+                                              {answerQuestionMutation.isError && answerQuestionMutation.variables?.questionId === question.id && (
+                                                <p role="alert" className="mt-2 text-xs text-red-300">{answerQuestionMutation.error instanceof Error ? answerQuestionMutation.error.message : 'Unable to save the answer.'}</p>
+                                              )}
+                                              {answerFeedback?.questionId === question.id && <p role="status" className="mt-2 text-xs text-emerald-300">{answerFeedback.message}</p>}
+                                              <button type="submit" disabled={answerQuestionMutation.isPending} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+                                                {answerQuestionMutation.isPending && answerQuestionMutation.variables?.questionId === question.id
+                                                  ? 'Saving answer...'
+                                                  : question.answer ? 'Update answer' : 'Answer question'}
+                                              </button>
+                                            </form>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    )}
+                                  </section>
+                                )
+                              })()}
                             </li>
                           ))}
                         </ol>

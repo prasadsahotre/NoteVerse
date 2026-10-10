@@ -97,14 +97,14 @@ router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),requireAppr
     const questionId = Number(req.params.id)
     const { answer } = req.body
 
-    if (Number.isNaN(questionId)) {
+    if (!Number.isInteger(questionId) || questionId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid question ID',
       })
     }
 
-    if (!answer) {
+    if (typeof answer !== 'string' || !answer.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Answer is required',
@@ -171,11 +171,11 @@ router.patch('/:id/answer',authenticateToken,requireRole('EDUCATOR'),requireAppr
 })
 
 // Get all questions for a lesson
-router.get('/lesson/:lessonId', async (req, res) => {
+router.get('/lesson/:lessonId', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const lessonId = Number(req.params.lessonId)
 
-    if (Number.isNaN(lessonId)) {
+    if (!Number.isInteger(lessonId) || lessonId < 1) {
       return res.status(400).json({
         success: false,
         message: 'Invalid lesson ID',
@@ -186,12 +186,60 @@ router.get('/lesson/:lessonId', async (req, res) => {
       where: {
         id: lessonId,
       },
+      include: {
+        module: {
+          select: {
+            courseId: true,
+            course: {
+              select: {
+                educatorId: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     if (!lesson) {
       return res.status(404).json({
         success: false,
         message: 'Lesson not found',
+      })
+    }
+
+    const userId = req.user!.userId
+    const roles = req.user!.roles
+    let canReadQuestions = false
+
+    if (roles.includes('STUDENT')) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: lesson.module.courseId,
+          },
+        },
+        select: { id: true },
+      })
+      canReadQuestions = Boolean(enrollment)
+    }
+
+    if (
+      !canReadQuestions &&
+      roles.includes('EDUCATOR') &&
+      lesson.module.course.educatorId === userId
+    ) {
+      const educator = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { educatorApprovalStatus: true },
+      })
+      canReadQuestions = educator?.educatorApprovalStatus === 'APPROVED'
+    }
+
+    if (!canReadQuestions) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be enrolled in this course or be its approved educator to view questions',
       })
     }
 

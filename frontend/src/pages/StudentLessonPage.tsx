@@ -1,7 +1,9 @@
 import {
   useMutation,
   useQuery,
+  useQueryClient,
 } from '@tanstack/react-query'
+import { useState, type FormEvent } from 'react'
 
 import {
   Link,
@@ -24,6 +26,15 @@ interface Lesson {
   position: number
   youtubeVideoId: string | null
   quizzes: Quiz[]
+}
+
+interface LessonQuestion {
+  id: number
+  question: string
+  answer: string | null
+  answeredAt: string | null
+  createdAt: string
+  user: { id: number; name: string }
 }
 
 interface Module {
@@ -57,6 +68,16 @@ interface CourseResponse {
     }
     modules: Module[]
   }
+}
+
+interface LessonQuestionsResponse {
+  success: boolean
+  data: LessonQuestion[]
+}
+
+interface QuestionMutationResponse {
+  success: boolean
+  message: string
 }
 
 interface ProgressResponse {
@@ -94,6 +115,10 @@ function StudentLessonPage() {
   const { courseId, lessonId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [questionDraft, setQuestionDraft] = useState('')
+  const [questionValidationError, setQuestionValidationError] = useState('')
+  const [questionFeedback, setQuestionFeedback] = useState('')
 
   const courseIdNumber = Number(courseId)
   const lessonIdNumber = Number(lessonId)
@@ -149,6 +174,44 @@ function StudentLessonPage() {
       hasValidLessonId &&
       hasValidCourseId,
   })
+
+  const questionsQuery = useQuery({
+    queryKey: ['lesson-questions', user?.id, lessonIdNumber],
+    queryFn: async () => {
+      const response = await apiRequest<LessonQuestionsResponse>(
+        `/lesson-questions/lesson/${lessonIdNumber}`,
+      )
+      return response.data
+    },
+    enabled: Boolean(user && hasValidCourseId && hasValidLessonId && courseQuery.isSuccess),
+  })
+
+  const askQuestionMutation = useMutation({
+    mutationFn: (question: string) =>
+      apiRequest<QuestionMutationResponse>('/lesson-questions', {
+        method: 'POST',
+        body: JSON.stringify({ lessonId: lessonIdNumber, question }),
+      }),
+    onSuccess: async (response) => {
+      setQuestionDraft('')
+      setQuestionFeedback(response.message || 'Your question was submitted.')
+      await queryClient.invalidateQueries({
+        queryKey: ['lesson-questions', user?.id, lessonIdNumber],
+      })
+    },
+  })
+
+  const submitQuestion = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const question = questionDraft.trim()
+    setQuestionFeedback('')
+    if (!question) {
+      setQuestionValidationError('Enter a question before submitting.')
+      return
+    }
+    setQuestionValidationError('')
+    askQuestionMutation.mutate(question)
+  }
 
   /*
    * The API response structure is:
@@ -370,6 +433,71 @@ function StudentLessonPage() {
               'No lesson content available.'}
           </div>
         </article>
+
+        {/* Lesson Q&A */}
+        <section aria-labelledby="lesson-questions-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-7">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">Ask and learn</p>
+            <h2 id="lesson-questions-heading" className="mt-2 text-xl font-semibold">Lesson questions</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Questions and answers are shared with students enrolled in this course and its educator.</p>
+          </div>
+
+          {questionsQuery.isLoading && (
+            <p role="status" className="mt-5 text-sm text-slate-400">Loading questions...</p>
+          )}
+
+          {questionsQuery.isError && (
+            <div role="alert" className="mt-5 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">
+              <p>{questionsQuery.error instanceof Error ? questionsQuery.error.message : 'Unable to load lesson questions.'}</p>
+              <button type="button" onClick={() => void questionsQuery.refetch()} className="mt-3 rounded-lg border border-red-300/30 px-3 py-2 font-medium hover:bg-red-400/10">Try again</button>
+            </div>
+          )}
+
+          {!questionsQuery.isLoading && !questionsQuery.isError && questionsQuery.data?.length === 0 && (
+            <p className="mt-5 rounded-xl border border-dashed border-slate-700 px-4 py-5 text-sm text-slate-400">No questions yet. Ask the first question about this lesson.</p>
+          )}
+
+          {questionsQuery.data && questionsQuery.data.length > 0 && (
+            <ol className="mt-5 space-y-4">
+              {questionsQuery.data.map((item) => (
+                <li key={item.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                    <span className="font-medium text-slate-300">{item.user.name}{item.user.id === user?.id ? ' · You' : ''}</span>
+                    <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time>
+                  </div>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{item.question}</p>
+                  {item.answer ? (
+                    <div className="mt-4 rounded-lg border border-indigo-400/15 bg-indigo-400/[0.06] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-300">Educator answer</p>
+                      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{item.answer}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">Waiting for the educator’s reply.</p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <form onSubmit={submitQuestion} className="mt-6 border-t border-slate-800 pt-5">
+            <label htmlFor="lesson-question" className="block text-sm font-medium text-slate-200">Your question</label>
+            <textarea
+              id="lesson-question"
+              rows={3}
+              value={questionDraft}
+              onChange={(event) => setQuestionDraft(event.target.value)}
+              disabled={askQuestionMutation.isPending}
+              placeholder="What would you like to understand about this lesson?"
+              className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 disabled:opacity-60"
+            />
+            {questionValidationError && <p role="alert" className="mt-2 text-sm text-red-300">{questionValidationError}</p>}
+            {askQuestionMutation.isError && <p role="alert" className="mt-2 text-sm text-red-300">{askQuestionMutation.error instanceof Error ? askQuestionMutation.error.message : 'Unable to submit your question.'}</p>}
+            {questionFeedback && <p role="status" className="mt-2 text-sm text-emerald-300">{questionFeedback}</p>}
+            <button type="submit" disabled={askQuestionMutation.isPending} className="mt-3 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+              {askQuestionMutation.isPending ? 'Submitting...' : 'Submit question'}
+            </button>
+          </form>
+        </section>
 
         {/* Resources */}
         <section className="mt-8">
