@@ -319,15 +319,37 @@ router.get('/:id', async (req, res) => {
         id: courseId,
         status: 'PUBLISHED',
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        educatorId: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
         modules: {
           orderBy: {
             position: 'asc',
           },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            position: true,
+            courseId: true,
+            createdAt: true,
+            updatedAt: true,
             lessons: {
               orderBy: {
                 position: 'asc',
+              },
+              select: {
+                id: true,
+                title: true,
+                content: true,
+                position: true,
+                moduleId: true,
+                createdAt: true,
+                updatedAt: true,
               },
             },
           },

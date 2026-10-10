@@ -10,6 +10,7 @@ interface CurriculumLesson {
   content: string | null
   position: number
   moduleId: number
+  youtubeVideoId: string | null
 }
 
 interface CurriculumModule {
@@ -61,6 +62,7 @@ function EducatorCurriculumPage() {
   const [lessonForm, setLessonForm] = useState<LessonFormState | null>(null)
   const [lessonTitle, setLessonTitle] = useState('')
   const [lessonContent, setLessonContent] = useState('')
+  const [lessonYoutubeUrl, setLessonYoutubeUrl] = useState('')
   const [lessonPosition, setLessonPosition] = useState('1')
   const [validationError, setValidationError] = useState('')
   const [feedback, setFeedback] = useState('')
@@ -126,7 +128,7 @@ function EducatorCurriculumPage() {
   })
 
   const createLessonMutation = useMutation({
-    mutationFn: (values: { title: string; content: string | null; position: number; moduleId: number }) =>
+    mutationFn: (values: { title: string; content: string | null; position: number; moduleId: number; youtubeUrl: string | null }) =>
       apiRequest<MutationResponse>('/lessons', {
         method: 'POST',
         body: JSON.stringify(values),
@@ -139,7 +141,7 @@ function EducatorCurriculumPage() {
   })
 
   const updateLessonMutation = useMutation({
-    mutationFn: ({ id, ...values }: { id: number; title: string; content: string | null; position: number }) =>
+    mutationFn: ({ id, ...values }: { id: number; title: string; content: string | null; position: number; youtubeUrl: string | null }) =>
       apiRequest<MutationResponse>(`/lessons/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(values),
@@ -212,6 +214,7 @@ function EducatorCurriculumPage() {
     const nextPosition = Math.max(0, ...module.lessons.map((item) => item.position)) + 1
     setLessonTitle('')
     setLessonContent('')
+    setLessonYoutubeUrl('')
     setLessonPosition(String(nextPosition))
     setLessonForm({ moduleId: module.id, lessonId: null })
     setModuleForm(null)
@@ -223,6 +226,7 @@ function EducatorCurriculumPage() {
     resetMutationErrors()
     setLessonTitle(lesson.title)
     setLessonContent(lesson.content ?? '')
+    setLessonYoutubeUrl(lesson.youtubeVideoId ? `https://www.youtube.com/watch?v=${lesson.youtubeVideoId}` : '')
     setLessonPosition(String(lesson.position))
     setLessonForm({ moduleId, lessonId: lesson.id })
     setModuleForm(null)
@@ -259,12 +263,14 @@ function EducatorCurriculumPage() {
     }
     if (!lessonForm) return
     const content = lessonContent.trim() || null
+    const youtubeUrl = lessonYoutubeUrl.trim() || null
     if (lessonForm.lessonId === null) {
       createLessonMutation.mutate({
         title: trimmedTitle,
         content,
         position: numericPosition,
         moduleId: lessonForm.moduleId,
+        youtubeUrl,
       })
     } else {
       updateLessonMutation.mutate({
@@ -272,6 +278,7 @@ function EducatorCurriculumPage() {
         title: trimmedTitle,
         content,
         position: numericPosition,
+        youtubeUrl,
       })
     }
   }
@@ -404,7 +411,7 @@ function EducatorCurriculumPage() {
                               {lessonForm?.lessonId === lesson.id ? (
                                 <form onSubmit={submitLesson}>
                                   <h4 className="font-semibold text-white">Edit lesson</h4>
-                                  <LessonFields title={lessonTitle} setTitle={setLessonTitle} content={lessonContent} setContent={setLessonContent} position={lessonPosition} setPosition={setLessonPosition} />
+                                  <LessonFields title={lessonTitle} setTitle={setLessonTitle} content={lessonContent} setContent={setLessonContent} youtubeUrl={lessonYoutubeUrl} setYoutubeUrl={setLessonYoutubeUrl} position={lessonPosition} setPosition={setLessonPosition} />
                                   <FormActions onCancel={() => setLessonForm(null)} pending={updateLessonMutation.isPending} submitLabel="Save lesson" />
                                   {validationError && <p role="alert" className="mt-3 text-sm text-red-300">{validationError}</p>}
                                 </form>
@@ -435,7 +442,7 @@ function EducatorCurriculumPage() {
                       {lessonForm?.moduleId === module.id && lessonForm.lessonId === null && (
                         <form onSubmit={submitLesson} className="mt-4 rounded-xl border border-indigo-400/20 bg-slate-950/70 p-4 sm:p-5">
                           <h4 className="font-semibold text-white">Create lesson</h4>
-                          <LessonFields title={lessonTitle} setTitle={setLessonTitle} content={lessonContent} setContent={setLessonContent} position={lessonPosition} setPosition={setLessonPosition} />
+                          <LessonFields title={lessonTitle} setTitle={setLessonTitle} content={lessonContent} setContent={setLessonContent} youtubeUrl={lessonYoutubeUrl} setYoutubeUrl={setLessonYoutubeUrl} position={lessonPosition} setPosition={setLessonPosition} />
                           <FormActions onCancel={() => setLessonForm(null)} pending={createLessonMutation.isPending} submitLabel="Create lesson" />
                           {validationError && <p role="alert" className="mt-3 text-sm text-red-300">{validationError}</p>}
                         </form>
@@ -484,6 +491,8 @@ function LessonFields({
   setTitle,
   content,
   setContent,
+  youtubeUrl,
+  setYoutubeUrl,
   position,
   setPosition,
 }: {
@@ -491,6 +500,8 @@ function LessonFields({
   setTitle: (value: string) => void
   content: string
   setContent: (value: string) => void
+  youtubeUrl: string
+  setYoutubeUrl: (value: string) => void
   position: string
   setPosition: (value: string) => void
 }) {
@@ -507,6 +518,11 @@ function LessonFields({
       <div className="sm:col-span-2">
         <label htmlFor="lesson-content" className="block text-sm font-medium text-slate-200">Lesson content <span className="font-normal text-slate-500">(optional)</span></label>
         <textarea id="lesson-content" rows={4} value={content} onChange={(event) => setContent(event.target.value)} className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm leading-6 text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+      </div>
+      <div className="sm:col-span-2">
+        <label htmlFor="lesson-youtube-url" className="block text-sm font-medium text-slate-200">YouTube video URL <span className="font-normal text-slate-500">(optional)</span></label>
+        <input id="lesson-youtube-url" type="url" inputMode="url" autoComplete="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=..." className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+        <p className="mt-2 text-xs leading-5 text-slate-500">You can paste a YouTube watch, short, embed, or youtu.be link. Clear this field to remove the video.</p>
       </div>
     </div>
   )

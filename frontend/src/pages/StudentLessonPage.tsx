@@ -22,6 +22,7 @@ interface Lesson {
   title: string
   content: string | null
   position: number
+  youtubeVideoId: string | null
   quizzes: Quiz[]
 }
 
@@ -343,6 +344,24 @@ function StudentLessonPage() {
             {lesson.title}
           </h1>
         </div>
+
+        {lesson.youtubeVideoId && /^[A-Za-z0-9_-]{11}$/.test(lesson.youtubeVideoId) && (
+          <section aria-label="Lesson video" className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+            <div className="aspect-video w-full bg-black">
+              <iframe
+                className="h-full w-full"
+                src={`https://www.youtube-nocookie.com/embed/${lesson.youtubeVideoId}`}
+                title={`${lesson.title} video`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+            <p className="px-4 py-3 text-xs leading-5 text-slate-400 sm:px-5">
+              This video is hosted by YouTube. Unlisted videos can be watched by anyone with the link and are not private to NoteVerse students.
+            </p>
+          </section>
+        )}
 
         {/* Lesson Content */}
         <article className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-8">

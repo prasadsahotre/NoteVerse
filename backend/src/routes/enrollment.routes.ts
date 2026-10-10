@@ -231,6 +231,7 @@ router.get(
           title: lesson.title,
           content: lesson.content,
           position: lesson.position,
+          youtubeVideoId: lesson.youtubeVideoId,
           completed: completedLessonIds.has(lesson.id),
           quizzes: lesson.quizzes,
         })),

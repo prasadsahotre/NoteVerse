@@ -6,12 +6,22 @@ import {
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
 import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
+import { parseOptionalYoutubeVideoId } from '../utils/youtube.js'
 
 const router = Router()
 
 router.get('/', async (_req, res) => {
   try {
     const lessons = await prisma.lesson.findMany({
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        position: true,
+        moduleId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: [
         {
           moduleId: 'asc',
@@ -38,7 +48,16 @@ router.get('/', async (_req, res) => {
 
 router.post('/',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
-    const { title, content, position, moduleId } = req.body
+    const { title, content, position, moduleId, youtubeUrl } = req.body
+
+    const parsedYoutubeField = parseOptionalYoutubeVideoId(youtubeUrl)
+    if (!parsedYoutubeField.valid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter a valid YouTube video URL',
+      })
+    }
+    const youtubeVideoId = parsedYoutubeField.videoId ?? null
 
     if (!title || position === undefined || !moduleId) {
       return res.status(400).json({
@@ -88,6 +107,7 @@ router.post('/',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducato
         content,
         position: Number(position),
         moduleId: Number(moduleId),
+        youtubeVideoId,
       },
     })
 
@@ -109,7 +129,17 @@ router.post('/',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducato
 router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEducator,async (req: AuthRequest, res) => {
   try {
     const lessonId = Number(req.params.id)
-    const { title, content, position } = req.body
+    const { title, content, position, youtubeUrl } = req.body
+    const parsedYoutubeField = parseOptionalYoutubeVideoId(youtubeUrl)
+    if (!parsedYoutubeField.valid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter a valid YouTube video URL',
+      })
+    }
+    const youtubeVideoId = parsedYoutubeField.provided
+      ? parsedYoutubeField.videoId ?? null
+      : undefined
 
     if (Number.isNaN(lessonId)) {
       return res.status(400).json({
@@ -148,7 +178,8 @@ router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEdu
     if (
       title === undefined &&
       content === undefined &&
-      position === undefined
+      position === undefined &&
+      youtubeUrl === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -164,6 +195,7 @@ router.patch('/:id',authenticateToken,requireRole('EDUCATOR'),requireApprovedEdu
         ...(title !== undefined && { title }),
         ...(content !== undefined && { content }),
         ...(position !== undefined && { position: Number(position) }),
+        ...(youtubeVideoId !== undefined && { youtubeVideoId }),
       },
     })
 
