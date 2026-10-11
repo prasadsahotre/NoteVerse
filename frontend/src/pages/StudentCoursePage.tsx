@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import { useAuth } from '../auth/useAuth'
+import './StudentCourse.css'
 
 interface Lesson {
   id: number
@@ -245,9 +246,9 @@ function StudentCoursePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="nv-course-page nv-course-learning min-h-screen bg-slate-950 text-white">
       {/* Navbar */}
-      <nav className="border-b border-slate-800 bg-slate-950/90">
+      <nav className="nv-course-nav border-b border-slate-800 bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link
             to="/student"
@@ -265,9 +266,9 @@ function StudentCoursePage() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="nv-course-main mx-auto max-w-5xl px-6 py-10">
         {/* Course Header */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8">
+        <div className="nv-course-hero rounded-2xl border border-slate-800 bg-slate-900 p-8">
           <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">
             Course
           </p>
@@ -331,7 +332,7 @@ function StudentCoursePage() {
           </div>
         </div>
 
-        <section aria-labelledby="your-review-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-7">
+        <section aria-labelledby="your-review-heading" className="nv-course-panel mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-7">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">Your feedback</p>
@@ -441,7 +442,7 @@ function StudentCoursePage() {
         </section>
 
         {/* Course Content */}
-        <section className="mt-8">
+        <section className="nv-course-content-section mt-8">
           <h2 className="text-2xl font-bold">
             Course Content
           </h2>
@@ -455,7 +456,7 @@ function StudentCoursePage() {
               data.modules.map((module) => (
                 <div
                   key={module.id}
-                  className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                  className="nv-course-module overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
                 >
                   {/* Module Header */}
                   <div className="border-b border-slate-800 px-6 py-4">

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiRequest } from '../api/client'
+import './StudentCourse.css'
 
 type CourseSort = 'newest' | 'oldest' | 'popular' | 'top-rated'
 
@@ -61,8 +62,8 @@ function StudentCourseDiscoveryPage() {
   const pagination = coursesQuery.data?.pagination
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <nav className="border-b border-white/10">
+    <div className="nv-course-page nv-course-discovery min-h-screen bg-slate-950 text-white">
+      <nav className="nv-course-nav border-b border-white/10">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
           <Link to="/student" className="text-2xl font-bold tracking-tight">
             Note<span className="text-indigo-400">Verse</span>
@@ -76,7 +77,7 @@ function StudentCourseDiscoveryPage() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-7xl px-6 py-12">
+      <main className="nv-course-main mx-auto max-w-7xl px-6 py-12">
         <div>
           <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">
             Course Discovery
@@ -87,7 +88,7 @@ function StudentCourseDiscoveryPage() {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+        <div className="nv-course-filters mt-8 flex flex-col gap-4 sm:flex-row">
           <label className="flex-1">
             <span className="sr-only">Search courses</span>
             <input
@@ -164,11 +165,11 @@ function StudentCourseDiscoveryPage() {
           !coursesQuery.isError &&
           courses.length > 0 && (
             <>
-              <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="nv-discovery-grid mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course) => (
                   <article
                     key={course.id}
-                    className="flex flex-col rounded-2xl border border-white/10 bg-white/5 p-6"
+                    className="nv-course-card flex flex-col rounded-2xl border border-white/10 bg-white/5 p-6"
                   >
                     <div className="flex-1">
                       <p className="text-xs font-medium uppercase tracking-wider text-indigo-400">

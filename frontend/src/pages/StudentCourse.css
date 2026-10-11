@@ -1,0 +1,193 @@
+/* NoteVerse student course experience — Midnight Indigo
+   Scoped to the three student course pages; does not change global styles. */
+.nv-course-page {
+  --nv-course-border: rgba(148, 163, 184, 0.16);
+  --nv-course-muted: #9aa4bd;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #080a14;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(79, 70, 229, 0.20), transparent 38%),
+    radial-gradient(ellipse at 92% 16%, rgba(14, 165, 233, 0.065), transparent 28%),
+    linear-gradient(180deg, #0a0c18 0%, #080a14 58%, #080a14 100%);
+}
+.nv-course-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.13;
+  background-image: radial-gradient(rgba(165, 180, 252, 0.38) 0.6px, transparent 0.6px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 65%);
+}
+.nv-course-page > nav,
+.nv-course-page > main {
+  position: relative;
+  z-index: 1;
+}
+.nv-course-nav {
+  background: rgba(8, 10, 20, 0.76);
+  border-color: rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(18px);
+}
+.nv-course-nav a:first-child {
+  letter-spacing: -0.045em;
+}
+.nv-course-nav a,
+.nv-course-page a,
+.nv-course-page button {
+  -webkit-tap-highlight-color: transparent;
+}
+.nv-course-page a:focus-visible,
+.nv-course-page button:focus-visible,
+.nv-course-page input:focus-visible,
+.nv-course-page select:focus-visible,
+.nv-course-page textarea:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 3px;
+}
+.nv-course-main {
+  animation: nv-course-enter 550ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.nv-course-main h1,
+.nv-course-main h2,
+.nv-course-main h3 {
+  letter-spacing: -0.035em;
+}
+.nv-course-hero,
+.nv-course-panel,
+.nv-course-module,
+.nv-course-card,
+.nv-course-filters,
+.nv-course-page main > div.rounded-2xl {
+  border-color: var(--nv-course-border) !important;
+  background: linear-gradient(145deg, rgba(20, 24, 46, 0.94), rgba(12, 15, 29, 0.96)) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.15), inset 0 1px rgba(255,255,255,0.025);
+  backdrop-filter: blur(14px);
+}
+.nv-course-hero {
+  position: relative;
+  overflow: hidden;
+}
+.nv-course-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, #818cf8, #22d3ee, transparent 85%);
+  opacity: 0.8;
+}
+.nv-course-hero > * {
+  position: relative;
+}
+.nv-course-filters {
+  padding: 0.85rem;
+  border-radius: 1.1rem;
+}
+.nv-course-filters input,
+.nv-course-filters select,
+.nv-course-page input,
+.nv-course-page select,
+.nv-course-page textarea {
+  border-color: rgba(148, 163, 184, 0.2);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.nv-course-filters input:focus,
+.nv-course-filters select:focus,
+.nv-course-page input:focus,
+.nv-course-page select:focus,
+.nv-course-page textarea:focus {
+  border-color: rgba(129, 140, 248, 0.82);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.11);
+}
+.nv-course-card {
+  min-width: 0;
+  border-radius: 1.2rem;
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.nv-course-card:hover,
+.nv-course-module:hover,
+.nv-course-panel:hover {
+  border-color: rgba(129, 140, 248, 0.28) !important;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.22), 0 0 28px rgba(79, 70, 229, 0.045);
+}
+.nv-course-card:hover { transform: translateY(-3px); }
+.nv-course-card > a:last-child {
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.18);
+}
+.nv-course-module {
+  border-radius: 1.05rem;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.nv-course-module > div:first-child {
+  background: rgba(99, 102, 241, 0.045);
+}
+.nv-course-module > div + div > div,
+.nv-course-module li {
+  transition: background-color 180ms ease;
+}
+.nv-course-module > div + div > div:hover,
+.nv-course-module li:hover {
+  background-color: rgba(99, 102, 241, 0.045);
+}
+.nv-course-content-section > div,
+.nv-course-content-section > div > div {
+  border-color: var(--nv-course-border);
+}
+.nv-course-page [role="progressbar"] > div {
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.35);
+  transition: width 450ms ease;
+}
+.nv-course-page button {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.nv-course-page button:not(:disabled):active {
+  transform: translateY(1px);
+}
+.nv-course-page button:disabled {
+  cursor: not-allowed;
+}
+.nv-course-page .text-red-300,
+.nv-course-page .text-red-200 {
+  overflow-wrap: anywhere;
+}
+.nv-course-discovery .nv-discovery-grid {
+  align-items: stretch;
+}
+.nv-course-discovery .nv-discovery-grid > article {
+  animation: nv-course-enter 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.nv-course-discovery .nv-discovery-grid > article:nth-child(3n + 2) {
+  animation-delay: 65ms;
+}
+.nv-course-discovery .nv-discovery-grid > article:nth-child(3n) {
+  animation-delay: 130ms;
+}
+@keyframes nv-course-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 640px) {
+  .nv-course-main { padding-left: 1rem; padding-right: 1rem; padding-top: 1.5rem; padding-bottom: 2.5rem; }
+  .nv-course-hero { padding: 1.25rem !important; }
+  .nv-course-card { padding: 1.1rem !important; }
+  .nv-course-module > div:first-child,
+  .nv-course-module > div + div > div,
+  .nv-course-module li { padding-left: 1rem; padding-right: 1rem; }
+  .nv-course-page h1 { font-size: clamp(1.65rem, 7vw, 2.25rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nv-course-main,
+  .nv-course-discovery .nv-discovery-grid > article {
+    animation: none !important;
+  }
+  .nv-course-page *,
+  .nv-course-page *::before,
+  .nv-course-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

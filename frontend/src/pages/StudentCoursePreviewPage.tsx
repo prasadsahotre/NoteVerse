@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import { useMyEnrollments } from '../features/student/studentApi'
+import './StudentCourse.css'
 
 interface CoursePreview {
   id: number
@@ -152,8 +153,8 @@ function StudentCoursePreviewPage() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <nav className="border-b border-white/10">
+    <div className="nv-course-page nv-course-preview min-h-screen bg-slate-950 text-white">
+      <nav className="nv-course-nav border-b border-white/10">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
           <Link to="/student" className="text-2xl font-bold tracking-tight">
             Note<span className="text-indigo-400">Verse</span>
@@ -167,8 +168,8 @@ function StudentCoursePreviewPage() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-8">
+      <main className="nv-course-main mx-auto max-w-5xl px-6 py-10">
+        <section className="nv-course-hero rounded-2xl border border-slate-800 bg-slate-900 p-8">
           <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">
             Published Course
           </p>
@@ -243,7 +244,7 @@ function StudentCoursePreviewPage() {
           </div>
         </section>
 
-        <section aria-labelledby="course-reviews-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+        <section aria-labelledby="course-reviews-heading" className="nv-course-panel mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">Student feedback</p>
@@ -290,7 +291,7 @@ function StudentCoursePreviewPage() {
           )}
         </section>
 
-        <section className="mt-8">
+        <section className="nv-course-content-section mt-8">
           <h2 className="text-2xl font-bold">Course Content</h2>
           {course.modules.length === 0 ? (
             <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-6 text-slate-400">
@@ -301,7 +302,7 @@ function StudentCoursePreviewPage() {
               {course.modules.map((module) => (
                 <div
                   key={module.id}
-                  className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
+                  className="nv-course-module overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
                 >
                   <div className="border-b border-slate-800 px-6 py-4">
                     <h3 className="font-semibold">
