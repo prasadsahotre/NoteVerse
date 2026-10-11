@@ -1,115 +1,22 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
-import { useState, type FormEvent } from 'react'
-
-import {
-  Link,
-  useNavigate,
-  useParams,
-} from 'react-router-dom'
-
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
+import './StudentLesson.css'
 
-interface Quiz {
-  id: number
-  title: string
-}
-
-interface Lesson {
-  id: number
-  title: string
-  content: string | null
-  position: number
-  youtubeVideoId: string | null
-  quizzes: Quiz[]
-}
-
-interface LessonQuestion {
-  id: number
-  question: string
-  answer: string | null
-  answeredAt: string | null
-  createdAt: string
-  user: { id: number; name: string }
-}
-
-interface Module {
-  id: number
-  title: string
-  position: number
-  lessons: Lesson[]
-}
-
-interface Course {
-  id: number
-  title: string
-  description: string
-  status: string
-}
-
-interface CourseResponse {
-  success: boolean
-  data: {
-    enrollment: {
-      id: number
-      userId: number
-      courseId: number
-      createdAt: string
-    }
-    course: Course
-    progress: {
-      totalLessons: number
-      completedLessons: number
-      progressPercentage: number
-    }
-    modules: Module[]
-  }
-}
-
-interface LessonQuestionsResponse {
-  success: boolean
-  data: LessonQuestion[]
-}
-
-interface QuestionMutationResponse {
-  success: boolean
-  message: string
-}
-
-interface ProgressResponse {
-  success: boolean
-  message: string
-  data?: unknown
-}
-
-interface LessonResource {
-  id: number
-  title: string
-  type: string
-  lessonId: number
-  createdAt: string
-  updatedAt: string
-}
-
-interface ResourcesResponse {
-  success: boolean
-  data: LessonResource[]
-}
-
-interface ResourceDownloadResponse {
-  success: boolean
-  data: {
-    id: number
-    title: string
-    type: string
-    downloadUrl: string
-    expiresIn: number
-  }
-}
+interface Quiz { id: number; title: string }
+interface Lesson { id: number; title: string; content: string | null; position: number; youtubeVideoId: string | null; quizzes: Quiz[] }
+interface LessonQuestion { id: number; question: string; answer: string | null; answeredAt: string | null; createdAt: string; user: { id: number; name: string } }
+interface Module { id: number; title: string; position: number; lessons: Lesson[] }
+interface Course { id: number; title: string; description: string; status: string }
+interface CourseResponse { success: boolean; data: { enrollment: { id: number; userId: number; courseId: number; createdAt: string }; course: Course; progress: { totalLessons: number; completedLessons: number; progressPercentage: number }; modules: Module[] } }
+interface LessonQuestionsResponse { success: boolean; data: LessonQuestion[] }
+interface QuestionMutationResponse { success: boolean; message: string }
+interface ProgressResponse { success: boolean; message: string; data?: unknown }
+interface LessonResource { id: number; title: string; type: string; lessonId: number; createdAt: string; updatedAt: string }
+interface ResourcesResponse { success: boolean; data: LessonResource[] }
+interface ResourceDownloadResponse { success: boolean; data: { id: number; title: string; type: string; downloadUrl: string; expiresIn: number } }
 
 function StudentLessonPage() {
   const { courseId, lessonId } = useParams()
@@ -119,569 +26,120 @@ function StudentLessonPage() {
   const [questionDraft, setQuestionDraft] = useState('')
   const [questionValidationError, setQuestionValidationError] = useState('')
   const [questionFeedback, setQuestionFeedback] = useState('')
-
   const courseIdNumber = Number(courseId)
   const lessonIdNumber = Number(lessonId)
-
-  const hasValidCourseId =
-    Boolean(courseId) &&
-    Number.isInteger(courseIdNumber) &&
-    courseIdNumber > 0
-
-  const hasValidLessonId =
-    Boolean(lessonId) &&
-    Number.isInteger(lessonIdNumber) &&
-    lessonIdNumber > 0
+  const hasValidCourseId = Boolean(courseId) && Number.isInteger(courseIdNumber) && courseIdNumber > 0
+  const hasValidLessonId = Boolean(lessonId) && Number.isInteger(lessonIdNumber) && lessonIdNumber > 0
 
   const courseQuery = useQuery({
-    queryKey: [
-      'student-course',
-      user?.id,
-      courseIdNumber,
-    ],
-
+    queryKey: ['student-course', user?.id, courseIdNumber],
     queryFn: async () => {
-      if (!user) {
-        throw new Error('User is not authenticated')
-      }
-
-      const response = await apiRequest<CourseResponse>(
-        `/enrollments/user/${user.id}/course/${courseIdNumber}`,
-      )
-
+      if (!user) throw new Error('User is not authenticated')
+      const response = await apiRequest<CourseResponse>(`/enrollments/user/${user.id}/course/${courseIdNumber}`)
       return response.data
     },
-
-    enabled:
-      Boolean(user) &&
-      hasValidCourseId &&
-      hasValidLessonId,
+    enabled: Boolean(user) && hasValidCourseId && hasValidLessonId,
   })
-
   const resourcesQuery = useQuery({
     queryKey: ['lesson-resources', lessonIdNumber],
-
-    queryFn: async () => {
-      const response =
-        await apiRequest<ResourcesResponse>(
-          `/lesson-resources/lesson/${lessonIdNumber}`,
-        )
-
-      return response.data
-    },
-
-    enabled:
-      hasValidLessonId &&
-      hasValidCourseId,
+    queryFn: async () => (await apiRequest<ResourcesResponse>(`/lesson-resources/lesson/${lessonIdNumber}`)).data,
+    enabled: hasValidLessonId && hasValidCourseId,
   })
-
   const questionsQuery = useQuery({
     queryKey: ['lesson-questions', user?.id, lessonIdNumber],
-    queryFn: async () => {
-      const response = await apiRequest<LessonQuestionsResponse>(
-        `/lesson-questions/lesson/${lessonIdNumber}`,
-      )
-      return response.data
-    },
+    queryFn: async () => (await apiRequest<LessonQuestionsResponse>(`/lesson-questions/lesson/${lessonIdNumber}`)).data,
     enabled: Boolean(user && hasValidCourseId && hasValidLessonId && courseQuery.isSuccess),
   })
-
   const askQuestionMutation = useMutation({
-    mutationFn: (question: string) =>
-      apiRequest<QuestionMutationResponse>('/lesson-questions', {
-        method: 'POST',
-        body: JSON.stringify({ lessonId: lessonIdNumber, question }),
-      }),
+    mutationFn: (question: string) => apiRequest<QuestionMutationResponse>('/lesson-questions', { method: 'POST', body: JSON.stringify({ lessonId: lessonIdNumber, question }) }),
     onSuccess: async (response) => {
       setQuestionDraft('')
       setQuestionFeedback(response.message || 'Your question was submitted.')
-      await queryClient.invalidateQueries({
-        queryKey: ['lesson-questions', user?.id, lessonIdNumber],
-      })
+      await queryClient.invalidateQueries({ queryKey: ['lesson-questions', user?.id, lessonIdNumber] })
     },
   })
-
   const submitQuestion = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const question = questionDraft.trim()
     setQuestionFeedback('')
-    if (!question) {
-      setQuestionValidationError('Enter a question before submitting.')
-      return
-    }
+    if (!question) { setQuestionValidationError('Enter a question before submitting.'); return }
     setQuestionValidationError('')
     askQuestionMutation.mutate(question)
   }
 
-  /*
-   * The API response structure is:
-   *
-   * data
-   * ├── enrollment
-   * ├── course
-   * ├── progress
-   * └── modules
-   *
-   * Therefore:
-   * - course = courseQuery.data.course
-   * - modules = courseQuery.data.modules
-   */
   const courseData = courseQuery.data
-
   const course = courseData?.course
   const modules = courseData?.modules ?? []
-
-  const lesson = modules
-    .flatMap((module) => module.lessons)
-    .find((item) => item.id === lessonIdNumber)
-
-  const lessonModule = modules.find((module) =>
-    module.lessons.some(
-      (item) => item.id === lessonIdNumber,
-    ),
-  )
-
+  const lesson = modules.flatMap((module) => module.lessons).find((item) => item.id === lessonIdNumber)
+  const lessonModule = modules.find((module) => module.lessons.some((item) => item.id === lessonIdNumber))
   const completeLessonMutation = useMutation({
     mutationFn: async () => {
-      if (!user) {
-        throw new Error('User is not authenticated')
-      }
-
-      return apiRequest<ProgressResponse>('/progress', {
-        method: 'POST',
-
-        body: JSON.stringify({
-          userId: user.id,
-          lessonId: lessonIdNumber,
-        }),
-      })
+      if (!user) throw new Error('User is not authenticated')
+      return apiRequest<ProgressResponse>('/progress', { method: 'POST', body: JSON.stringify({ userId: user.id, lessonId: lessonIdNumber }) })
     },
-
-    onSuccess: () => {
-      navigate(`/student/courses/${courseIdNumber}`)
-    },
+    onSuccess: () => navigate(`/student/courses/${courseIdNumber}`),
   })
-
   const downloadResourceMutation = useMutation({
-    mutationFn: async (resourceId: number) => {
-      const response =
-        await apiRequest<ResourceDownloadResponse>(
-          `/lesson-resources/${resourceId}/download`,
-        )
-
-      return response.data
-    },
-
-    onSuccess: (resource) => {
-      window.open(
-        resource.downloadUrl,
-        '_blank',
-        'noopener,noreferrer',
-      )
-    },
+    mutationFn: async (resourceId: number) => (await apiRequest<ResourceDownloadResponse>(`/lesson-resources/${resourceId}/download`)).data,
+    onSuccess: (resource) => window.open(resource.downloadUrl, '_blank', 'noopener,noreferrer'),
   })
 
-  // Invalid route parameter
-  if (!hasValidCourseId || !hasValidLessonId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">
-            Invalid lesson URL
-          </h1>
+  if (!hasValidCourseId || !hasValidLessonId) return <LessonState title="Invalid lesson URL" message={`Course ID: ${courseId ?? 'missing'} · Lesson ID: ${lessonId ?? 'missing'}`}><Link to="/student" className="nv-lesson-primary-link">Back to Dashboard</Link></LessonState>
+  if (courseQuery.isLoading) return <LessonState title="Preparing your learning space" message="Loading lesson..." loading />
+  if (courseQuery.isError) return <LessonState title="Unable to load lesson" message={courseQuery.error instanceof Error ? courseQuery.error.message : 'Something went wrong.'}><button type="button" onClick={() => navigate(-1)} className="nv-lesson-primary-link">Go Back</button></LessonState>
+  if (!course || !lesson || !lessonModule) return <LessonState title="Lesson not found" message="This lesson could not be found in this course."><Link to={`/student/courses/${courseIdNumber}`} className="nv-lesson-primary-link">Back to Course</Link></LessonState>
 
-          <p className="mt-2 text-slate-400">
-            Course ID: {courseId ?? 'missing'} | Lesson ID:{' '}
-            {lessonId ?? 'missing'}
-          </p>
-
-          <Link
-            to="/student"
-            className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-3 font-medium hover:bg-indigo-500"
-          >
-            Back to Dashboard
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (courseQuery.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <p className="text-slate-400">
-          Loading lesson...
-        </p>
-      </div>
-    )
-  }
-
-  if (courseQuery.isError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">
-            Unable to load lesson
-          </h1>
-
-          <p className="mt-2 text-slate-400">
-            {courseQuery.error instanceof Error
-              ? courseQuery.error.message
-              : 'Something went wrong.'}
-          </p>
-
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="mt-6 rounded-lg bg-indigo-600 px-5 py-3 font-medium hover:bg-indigo-500"
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!course || !lesson || !lessonModule) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">
-            Lesson not found
-          </h1>
-
-          <p className="mt-2 text-slate-400">
-            This lesson could not be found in this course.
-          </p>
-
-          <Link
-            to={`/student/courses/${courseIdNumber}`}
-            className="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-3 font-medium hover:bg-indigo-500"
-          >
-            Back to Course
-          </Link>
-        </div>
-      </div>
-    )
-  }
+  const totalLessons = modules.reduce((total, item) => total + item.lessons.length, 0)
+  const lessonIndex = modules.flatMap((item) => item.lessons).findIndex((item) => item.id === lesson.id)
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* Navbar */}
-      <nav className="border-b border-slate-800 bg-slate-950/90">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link
-            to="/student"
-            className="text-xl font-bold"
-          >
-            Note<span className="text-indigo-400">Verse</span>
-          </Link>
-
-          <Link
-            to={`/student/courses/${course.id}`}
-            className="text-sm text-slate-300 hover:text-white"
-          >
-            ← Back to Course
-          </Link>
+    <div className="nv-lesson-page">
+      <nav className="nv-lesson-nav">
+        <div className="nv-lesson-nav-inner">
+          <Link to="/student" className="nv-lesson-brand">Note<span>Verse</span><i>♪</i></Link>
+          <div className="nv-lesson-nav-right"><span className="nv-lesson-nav-label">YOUR LEARNING SPACE</span><Link to={`/student/courses/${course.id}`} className="nv-lesson-back-link"><span aria-hidden="true">←</span> Back to course</Link></div>
         </div>
       </nav>
 
-      {/* Lesson */}
-      <main className="mx-auto max-w-4xl px-6 py-10">
-        {/* Breadcrumb */}
-        <div className="text-sm text-slate-500">
-          {course.title}
+      <main className="nv-lesson-main">
+        <div className="nv-lesson-breadcrumb"><Link to={`/student/courses/${course.id}`}>{course.title}</Link><span>/</span><span>{lessonModule.title}</span></div>
+        <header className="nv-lesson-heading">
+          <div className="nv-lesson-heading-copy"><div className="nv-lesson-eyebrow"><span className="nv-lesson-eyebrow-dot" /> MODULE {lessonModule.position} <span className="nv-lesson-eyebrow-divider">/</span> LESSON {lesson.position}</div><h1>{lesson.title}</h1><p>Take your time, explore the material, and keep building your musical skills.</p></div>
+          <div className="nv-lesson-counter"><span>LESSON</span><strong>{String(lessonIndex + 1).padStart(2, '0')}<small> / {String(totalLessons).padStart(2, '0')}</small></strong></div>
+        </header>
 
-          <span className="mx-2">/</span>
+        {lesson.youtubeVideoId && /^[A-Za-z0-9_-]{11}$/.test(lesson.youtubeVideoId) && <section aria-label="Lesson video" className="nv-lesson-video-card"><div className="nv-lesson-video-frame"><iframe src={`https://www.youtube-nocookie.com/embed/${lesson.youtubeVideoId}`} title={`${lesson.title} video`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" /></div><p className="nv-lesson-video-note"><span aria-hidden="true">ⓘ</span> This video is hosted by YouTube. Unlisted videos can be watched by anyone with the link and are not private to NoteVerse students.</p></section>}
 
-          {lessonModule.title}
-        </div>
+        <article className="nv-lesson-panel nv-lesson-content-panel"><div className="nv-lesson-panel-heading"><div className="nv-lesson-icon-tile">☷</div><div><span className="nv-lesson-section-kicker">THE LEARNING NOTES</span><h2>Lesson overview</h2></div></div><div className="nv-lesson-content">{lesson.content || 'No lesson content available.'}</div></article>
 
-        {/* Lesson Header */}
-        <div className="mt-6">
-          <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">
-            Lesson {lesson.position}
-          </p>
-
-          <h1 className="mt-2 text-4xl font-bold">
-            {lesson.title}
-          </h1>
-        </div>
-
-        {lesson.youtubeVideoId && /^[A-Za-z0-9_-]{11}$/.test(lesson.youtubeVideoId) && (
-          <section aria-label="Lesson video" className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="aspect-video w-full bg-black">
-              <iframe
-                className="h-full w-full"
-                src={`https://www.youtube-nocookie.com/embed/${lesson.youtubeVideoId}`}
-                title={`${lesson.title} video`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            </div>
-            <p className="px-4 py-3 text-xs leading-5 text-slate-400 sm:px-5">
-              This video is hosted by YouTube. Unlisted videos can be watched by anyone with the link and are not private to NoteVerse students.
-            </p>
-          </section>
-        )}
-
-        {/* Lesson Content */}
-        <article className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-8">
-          <div className="whitespace-pre-wrap text-base leading-8 text-slate-300">
-            {lesson.content ||
-              'No lesson content available.'}
-          </div>
-        </article>
-
-        {/* Lesson Q&A */}
-        <section aria-labelledby="lesson-questions-heading" className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-7">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">Ask and learn</p>
-            <h2 id="lesson-questions-heading" className="mt-2 text-xl font-semibold">Lesson questions</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Questions and answers are shared with students enrolled in this course and its educator.</p>
-          </div>
-
-          {questionsQuery.isLoading && (
-            <p role="status" className="mt-5 text-sm text-slate-400">Loading questions...</p>
-          )}
-
-          {questionsQuery.isError && (
-            <div role="alert" className="mt-5 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">
-              <p>{questionsQuery.error instanceof Error ? questionsQuery.error.message : 'Unable to load lesson questions.'}</p>
-              <button type="button" onClick={() => void questionsQuery.refetch()} className="mt-3 rounded-lg border border-red-300/30 px-3 py-2 font-medium hover:bg-red-400/10">Try again</button>
-            </div>
-          )}
-
-          {!questionsQuery.isLoading && !questionsQuery.isError && questionsQuery.data?.length === 0 && (
-            <p className="mt-5 rounded-xl border border-dashed border-slate-700 px-4 py-5 text-sm text-slate-400">No questions yet. Ask the first question about this lesson.</p>
-          )}
-
-          {questionsQuery.data && questionsQuery.data.length > 0 && (
-            <ol className="mt-5 space-y-4">
-              {questionsQuery.data.map((item) => (
-                <li key={item.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                    <span className="font-medium text-slate-300">{item.user.name}{item.user.id === user?.id ? ' · You' : ''}</span>
-                    <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time>
-                  </div>
-                  <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-200">{item.question}</p>
-                  {item.answer ? (
-                    <div className="mt-4 rounded-lg border border-indigo-400/15 bg-indigo-400/[0.06] p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-300">Educator answer</p>
-                      <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{item.answer}</p>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-slate-500">Waiting for the educator’s reply.</p>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-
-          <form onSubmit={submitQuestion} className="mt-6 border-t border-slate-800 pt-5">
-            <label htmlFor="lesson-question" className="block text-sm font-medium text-slate-200">Your question</label>
-            <textarea
-              id="lesson-question"
-              rows={3}
-              value={questionDraft}
-              onChange={(event) => setQuestionDraft(event.target.value)}
-              disabled={askQuestionMutation.isPending}
-              placeholder="What would you like to understand about this lesson?"
-              className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 disabled:opacity-60"
-            />
-            {questionValidationError && <p role="alert" className="mt-2 text-sm text-red-300">{questionValidationError}</p>}
-            {askQuestionMutation.isError && <p role="alert" className="mt-2 text-sm text-red-300">{askQuestionMutation.error instanceof Error ? askQuestionMutation.error.message : 'Unable to submit your question.'}</p>}
-            {questionFeedback && <p role="status" className="mt-2 text-sm text-emerald-300">{questionFeedback}</p>}
-            <button type="submit" disabled={askQuestionMutation.isPending} className="mt-3 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
-              {askQuestionMutation.isPending ? 'Submitting...' : 'Submit question'}
-            </button>
-          </form>
+        <section aria-labelledby="lesson-questions-heading" className="nv-lesson-panel nv-lesson-qa-panel"><div className="nv-lesson-panel-heading"><div className="nv-lesson-icon-tile">✳</div><div><span className="nv-lesson-section-kicker">LEARN TOGETHER</span><h2 id="lesson-questions-heading">Questions & answers</h2><p>Ask your educator when something needs a little more explanation.</p></div></div>
+          {questionsQuery.isLoading && <p role="status" className="nv-lesson-muted-message">Loading questions...</p>}
+          {questionsQuery.isError && <div role="alert" className="nv-lesson-alert nv-lesson-alert-error"><p>{questionsQuery.error instanceof Error ? questionsQuery.error.message : 'Unable to load lesson questions.'}</p><button type="button" onClick={() => void questionsQuery.refetch()}>Try again</button></div>}
+          {!questionsQuery.isLoading && !questionsQuery.isError && questionsQuery.data?.length === 0 && <p className="nv-lesson-empty-state">No questions yet. Be the first to ask something about this lesson.</p>}
+          {questionsQuery.data && questionsQuery.data.length > 0 && <ol className="nv-lesson-question-list">{questionsQuery.data.map((item) => <li key={item.id} className="nv-lesson-question-card"><div className="nv-lesson-question-meta"><span>{item.user.name}{item.user.id === user?.id ? ' · You' : ''}</span><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time></div><p className="nv-lesson-question-text">{item.question}</p>{item.answer ? <div className="nv-lesson-answer"><span>EDUCATOR ANSWER</span><p>{item.answer}</p></div> : <p className="nv-lesson-waiting">◷ Waiting for the educator’s reply</p>}</li>)}</ol>}
+          <form onSubmit={submitQuestion} className="nv-lesson-question-form"><label htmlFor="lesson-question">Your question</label><textarea id="lesson-question" rows={3} value={questionDraft} onChange={(event) => setQuestionDraft(event.target.value)} disabled={askQuestionMutation.isPending} placeholder="What would you like to understand about this lesson?" />{questionValidationError && <p role="alert" className="nv-lesson-form-error">{questionValidationError}</p>}{askQuestionMutation.isError && <p role="alert" className="nv-lesson-form-error">{askQuestionMutation.error instanceof Error ? askQuestionMutation.error.message : 'Unable to submit your question.'}</p>}{questionFeedback && <p role="status" className="nv-lesson-form-success">{questionFeedback}</p>}<button type="submit" disabled={askQuestionMutation.isPending} className="nv-lesson-primary-button">{askQuestionMutation.isPending ? 'Submitting...' : 'Send question'} <span aria-hidden="true">↗</span></button></form>
         </section>
 
-        {/* Resources */}
-        <section className="mt-8">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">
-                Lesson Resources
-              </p>
-
-              <h2 className="mt-2 text-xl font-semibold">
-                Additional Materials
-              </h2>
-            </div>
-
-            {/* Loading */}
-            {resourcesQuery.isLoading && (
-              <p className="mt-5 text-sm text-slate-500">
-                Loading resources...
-              </p>
-            )}
-
-            {/* Error */}
-            {resourcesQuery.isError && (
-              <p className="mt-5 text-sm text-red-300">
-                Failed to load lesson resources.
-              </p>
-            )}
-
-            {/* No Resources */}
-            {!resourcesQuery.isLoading &&
-              !resourcesQuery.isError &&
-              resourcesQuery.data &&
-              resourcesQuery.data.length === 0 && (
-                <p className="mt-5 text-sm text-slate-500">
-                  No additional resources are available for
-                  this lesson.
-                </p>
-              )}
-
-            {/* Resources List */}
-            {!resourcesQuery.isLoading &&
-              !resourcesQuery.isError &&
-              resourcesQuery.data &&
-              resourcesQuery.data.length > 0 && (
-                <div className="mt-5 space-y-3">
-                  {resourcesQuery.data.map((resource) => (
-                    <div
-                      key={resource.id}
-                      className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-sm font-semibold text-indigo-300">
-                          {resource.type}
-                        </div>
-
-                        <div>
-                          <p className="font-medium text-white">
-                            {resource.title}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {resource.type} resource
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          downloadResourceMutation.mutate(
-                            resource.id,
-                          )
-                        }
-                        disabled={
-                          downloadResourceMutation.isPending
-                        }
-                        className="shrink-0 rounded-lg border border-indigo-500/40 px-4 py-2 text-sm font-medium text-indigo-300 transition hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {downloadResourceMutation.isPending
-                          ? 'Preparing...'
-                          : 'Download'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-            {/* Download Error */}
-            {downloadResourceMutation.isError && (
-              <div className="mt-4 rounded-lg border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">
-                {downloadResourceMutation.error instanceof
-                Error
-                  ? downloadResourceMutation.error.message
-                  : 'Failed to prepare the resource download.'}
-              </div>
-            )}
-          </div>
+        <section className="nv-lesson-panel nv-lesson-resources-panel"><div className="nv-lesson-panel-heading"><div className="nv-lesson-icon-tile">↧</div><div><span className="nv-lesson-section-kicker">GO A LITTLE DEEPER</span><h2>Lesson resources</h2><p>Keep helpful materials close while you practise.</p></div></div>
+          {resourcesQuery.isLoading && <p className="nv-lesson-muted-message">Loading resources...</p>}
+          {resourcesQuery.isError && <p className="nv-lesson-form-error">Failed to load lesson resources.</p>}
+          {!resourcesQuery.isLoading && !resourcesQuery.isError && resourcesQuery.data?.length === 0 && <p className="nv-lesson-empty-state">No additional resources are available for this lesson.</p>}
+          {!resourcesQuery.isLoading && !resourcesQuery.isError && resourcesQuery.data && resourcesQuery.data.length > 0 && <div className="nv-lesson-resource-list">{resourcesQuery.data.map((resource) => <div key={resource.id} className="nv-lesson-resource-item"><div className="nv-lesson-resource-symbol">{resource.type.slice(0, 4).toUpperCase()}</div><div className="nv-lesson-resource-copy"><strong>{resource.title}</strong><span>{resource.type} resource</span></div><button type="button" onClick={() => downloadResourceMutation.mutate(resource.id)} disabled={downloadResourceMutation.isPending} className="nv-lesson-secondary-button">{downloadResourceMutation.isPending ? 'Preparing...' : 'Download'} <span aria-hidden="true">↓</span></button></div>)}</div>}
+          {downloadResourceMutation.isError && <div className="nv-lesson-alert nv-lesson-alert-error">{downloadResourceMutation.error instanceof Error ? downloadResourceMutation.error.message : 'Failed to prepare the resource download.'}</div>}
         </section>
 
-        {/* Quiz */}
-        {lesson.quizzes.length > 0 && (
-          <section className="mt-8">
-            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-6">
-              <p className="text-sm font-medium uppercase tracking-wide text-indigo-400">
-                Knowledge Check
-              </p>
+        {lesson.quizzes.length > 0 && <section className="nv-lesson-quiz-callout"><div className="nv-lesson-quiz-orb" aria-hidden="true">✦</div><div className="nv-lesson-quiz-callout-copy"><span className="nv-lesson-section-kicker">READY FOR A QUICK CHECK?</span><h2>Put your knowledge to work.</h2><p>Try the quiz connected to this lesson and see what has clicked.</p></div><div className="nv-lesson-quiz-links">{lesson.quizzes.map((quiz) => <Link key={quiz.id} to={`/student/quizzes/${quiz.id}`} className="nv-lesson-quiz-link"><span>{quiz.title}</span><span aria-hidden="true">↗</span></Link>)}</div></section>}
 
-              <h2 className="mt-2 text-2xl font-bold">
-                Test Your Knowledge
-              </h2>
-
-              <p className="mt-2 text-slate-400">
-                Complete the quiz associated with this lesson to
-                test your understanding.
-              </p>
-
-              <div className="mt-5 space-y-3">
-                {lesson.quizzes.map((quiz) => (
-                  <div
-                    key={quiz.id}
-                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {quiz.title}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        Quiz
-                      </p>
-                    </div>
-
-                    <Link
-                      to={`/student/quizzes/${quiz.id}`}
-                      className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-                    >
-                      Take Quiz
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Completion */}
-        <div className="mt-8 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="font-semibold">
-              Finished this lesson?
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Mark the lesson as complete to update your
-              course progress.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              completeLessonMutation.mutate()
-            }
-            disabled={completeLessonMutation.isPending}
-            className="shrink-0 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {completeLessonMutation.isPending
-              ? 'Saving...'
-              : 'Mark as Complete'}
-          </button>
-        </div>
-
-        {/* Completion Error */}
-        {completeLessonMutation.isError && (
-          <div className="mt-4 rounded-lg border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-300">
-            {completeLessonMutation.error instanceof
-            Error
-              ? completeLessonMutation.error.message
-              : 'Failed to mark lesson as complete.'}
-          </div>
-        )}
+        <section className="nv-lesson-complete-card"><div className="nv-lesson-complete-mark" aria-hidden="true">✓</div><div className="nv-lesson-complete-copy"><h2>Finished this lesson?</h2><p>Mark it complete to update your course progress and keep your learning journey moving.</p></div><button type="button" onClick={() => completeLessonMutation.mutate()} disabled={completeLessonMutation.isPending} className="nv-lesson-primary-button">{completeLessonMutation.isPending ? 'Saving...' : 'Mark as complete'} <span aria-hidden="true">→</span></button></section>
+        {completeLessonMutation.isError && <div role="alert" className="nv-lesson-alert nv-lesson-alert-error">{completeLessonMutation.error instanceof Error ? completeLessonMutation.error.message : 'Failed to mark lesson as complete.'}</div>}
+        <footer className="nv-lesson-footer"><span>NOTEVERSE <i>♪</i></span><span>One lesson at a time.</span></footer>
       </main>
     </div>
   )
+}
+
+function LessonState({ title, message, children, loading = false }: { title: string; message: string; children?: ReactNode; loading?: boolean }) {
+  return <div className="nv-lesson-page nv-lesson-state-page"><div className="nv-lesson-state-card"><div className={`nv-lesson-state-symbol${loading ? ' is-loading' : ''}`}>{loading ? '♪' : '♫'}</div><span className="nv-lesson-section-kicker">NOTEVERSE LEARNING</span><h1>{title}</h1><p>{message}</p>{children}</div></div>
 }
 
 export default StudentLessonPage
