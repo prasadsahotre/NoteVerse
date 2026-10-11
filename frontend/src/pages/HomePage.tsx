@@ -32,6 +32,8 @@ function HomePage() {
   const [confirmation, setConfirmation] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
@@ -419,7 +421,18 @@ function HomePage() {
 
                 <div>
                   <label htmlFor="auth-password" className="nv-field-label">Password</label>
-                  <input id="auth-password" type="password" autoComplete={modalMode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={modalMode === 'signup' ? 8 : undefined} required className="nv-field" />
+                  <div className="relative">
+                    <input id="auth-password" type={showPassword ? 'text' : 'password'} autoComplete={modalMode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={modalMode === 'signup' ? 8 : undefined} required className="nv-field pr-16" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      className="absolute inset-y-0 right-3 my-auto h-fit rounded-md px-2 py-1 text-xs font-semibold text-violet-300 transition hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-300"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                   {modalMode === 'signup' && (
                     <div className="mt-3 text-xs leading-5 text-slate-400" aria-live="polite">
                       <p>Password strength: <span className="font-semibold text-violet-300">{getPasswordFeedback(password).label}</span></p>
@@ -433,7 +446,18 @@ function HomePage() {
                 {modalMode === 'signup' && (
                   <div>
                     <label htmlFor="auth-confirm-password" className="nv-field-label">Confirm password</label>
-                    <input id="auth-confirm-password" type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required className="nv-field" />
+                    <div className="relative">
+                      <input id="auth-confirm-password" type={showConfirmation ? 'text' : 'password'} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required className="nv-field pr-16" />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmation((visible) => !visible)}
+                        className="absolute inset-y-0 right-3 my-auto h-fit rounded-md px-2 py-1 text-xs font-semibold text-violet-300 transition hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-300"
+                        aria-label={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'}
+                        aria-pressed={showConfirmation}
+                      >
+                        {showConfirmation ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
                     {confirmation && password !== confirmation && <p className="mt-2 text-sm text-rose-300">Passwords do not match.</p>}
                   </div>
                 )}
