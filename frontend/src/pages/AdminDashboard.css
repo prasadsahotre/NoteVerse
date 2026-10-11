@@ -1,0 +1,140 @@
+/* NoteVerse Admin Dashboard — Midnight Indigo */
+.nv-admin-dashboard {
+  --nv-admin-border: rgba(148, 163, 184, 0.15);
+  --nv-admin-muted: #9aa4bd;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #080a14;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(79, 70, 229, 0.22), transparent 38%),
+    radial-gradient(ellipse at 90% 14%, rgba(14, 165, 233, 0.075), transparent 28%),
+    linear-gradient(180deg, #0a0c18 0%, #080a14 58%, #080a14 100%);
+}
+.nv-admin-dashboard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.15;
+  background-image: radial-gradient(rgba(165, 180, 252, 0.4) 0.6px, transparent 0.6px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 65%);
+}
+.nv-admin-dashboard > main { position: relative; z-index: 1; }
+.nv-admin-header {
+  padding: clamp(1.2rem, 3vw, 2.1rem);
+  border: 1px solid rgba(129, 140, 248, 0.18);
+  border-radius: 1.5rem;
+  background: linear-gradient(115deg, rgba(25, 28, 54, 0.94), rgba(13, 16, 31, 0.82));
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255,255,255,0.035);
+  animation: nv-admin-enter 650ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.nv-admin-header h1 { letter-spacing: -0.045em; }
+.nv-admin-dashboard button,
+.nv-admin-dashboard a,
+.nv-admin-dashboard input,
+.nv-admin-dashboard select {
+  -webkit-tap-highlight-color: transparent;
+}
+.nv-admin-dashboard button:focus-visible,
+.nv-admin-dashboard a:focus-visible,
+.nv-admin-dashboard input:focus-visible,
+.nv-admin-dashboard select:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 3px;
+}
+.nv-admin-section { scroll-margin-top: 1.5rem; }
+.nv-admin-section > div:first-child h2 { letter-spacing: -0.035em; }
+.nv-admin-panel {
+  border-color: var(--nv-admin-border) !important;
+  background: linear-gradient(145deg, rgba(20, 24, 46, 0.95), rgba(12, 15, 29, 0.97)) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.15), inset 0 1px rgba(255,255,255,0.025);
+  backdrop-filter: blur(14px);
+}
+.nv-admin-metric {
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.nv-admin-metric:hover {
+  transform: translateY(-3px);
+  border-color: rgba(129, 140, 248, 0.36) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24), 0 0 26px rgba(99, 102, 241, 0.075);
+}
+.nv-admin-metric > div:first-child {
+  opacity: 0.92;
+}
+.nv-admin-metrics > article:nth-child(2) { animation-delay: 55ms; }
+.nv-admin-metrics > article:nth-child(3) { animation-delay: 110ms; }
+.nv-admin-metrics > article:nth-child(4) { animation-delay: 165ms; }
+.nv-admin-metrics > article:nth-child(5) { animation-delay: 220ms; }
+.nv-admin-metric { animation: nv-admin-enter 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.nv-admin-filters {
+  border-radius: 1.1rem;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.12);
+}
+.nv-admin-filters input,
+.nv-admin-filters select {
+  border-color: rgba(148, 163, 184, 0.2);
+  background-color: rgba(7, 10, 22, 0.76);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.nv-admin-filters input:focus,
+.nv-admin-filters select:focus {
+  border-color: rgba(129, 140, 248, 0.82);
+  background-color: rgba(10, 13, 29, 0.98);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.11);
+}
+.nv-admin-table { box-shadow: 0 18px 48px rgba(0,0,0,0.15); }
+.nv-admin-row { transition: background-color 180ms ease; }
+.nv-admin-row:hover { background-color: rgba(99, 102, 241, 0.045); }
+.nv-admin-content-card {
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.nv-admin-content-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 0.27) !important;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.22), 0 0 28px rgba(79,70,229,0.045);
+}
+.nv-admin-dashboard [data-admin-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 550ms ease, transform 550ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.nv-admin-dashboard [data-admin-reveal].nv-admin-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.nv-admin-dashboard button { transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease; }
+.nv-admin-dashboard button:not(:disabled):active { transform: translateY(1px); }
+@keyframes nv-admin-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 640px) {
+  .nv-admin-header { border-radius: 1.15rem; }
+  .nv-admin-section { margin-top: 2.75rem; }
+  .nv-admin-panel { border-radius: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nv-admin-header,
+  .nv-admin-metric { animation: none !important; }
+  .nv-admin-dashboard *,
+  .nv-admin-dashboard *::before,
+  .nv-admin-dashboard *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .nv-admin-dashboard [data-admin-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+
+/* Async course/report results must never depend on the initial scroll observer. */
+.nv-admin-dashboard .nv-admin-content-card {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}

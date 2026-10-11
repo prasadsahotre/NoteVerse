@@ -1,0 +1,162 @@
+/* NoteVerse Educator Dashboard — Midnight Indigo */
+.nv-educator-dashboard {
+  --nv-ed-bg: #080a14;
+  --nv-ed-surface: rgba(17, 20, 39, 0.84);
+  --nv-ed-border: rgba(148, 163, 184, 0.15);
+  --nv-ed-muted: #9aa4bd;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: var(--nv-ed-bg);
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(79, 70, 229, 0.20), transparent 38%),
+    radial-gradient(ellipse at 90% 18%, rgba(14, 165, 233, 0.07), transparent 28%),
+    linear-gradient(180deg, #0a0c18 0%, #080a14 55%, #080a14 100%);
+}
+
+.nv-educator-dashboard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.16;
+  background-image: radial-gradient(rgba(165, 180, 252, 0.38) 0.6px, transparent 0.6px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 62%);
+}
+
+.nv-ed-main { position: relative; z-index: 1; }
+
+.nv-ed-header {
+  padding: clamp(1.1rem, 3vw, 2rem);
+  border: 1px solid rgba(129, 140, 248, 0.16);
+  border-radius: 1.5rem;
+  background: linear-gradient(115deg, rgba(25, 28, 54, 0.92), rgba(13, 16, 31, 0.78));
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18), inset 0 1px rgba(255,255,255,0.035);
+  animation: nv-ed-enter 650ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.nv-ed-header h1 { letter-spacing: -0.045em; }
+.nv-ed-header button,
+.nv-educator-dashboard button,
+.nv-educator-dashboard a {
+  -webkit-tap-highlight-color: transparent;
+}
+.nv-educator-dashboard button:focus-visible,
+.nv-educator-dashboard a:focus-visible,
+.nv-educator-dashboard input:focus-visible,
+.nv-educator-dashboard textarea:focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 3px;
+}
+
+.nv-ed-section { scroll-margin-top: 1.5rem; }
+.nv-ed-section > div:first-child h2 { letter-spacing: -0.035em; }
+.nv-ed-panel {
+  border-color: var(--nv-ed-border) !important;
+  background: linear-gradient(145deg, rgba(20, 24, 46, 0.94), rgba(12, 15, 29, 0.96)) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.14), inset 0 1px rgba(255,255,255,0.025);
+  backdrop-filter: blur(14px);
+}
+.nv-ed-course-form {
+  position: relative;
+  overflow: hidden;
+}
+.nv-ed-course-form::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #818cf8, #22d3ee, transparent 85%);
+  opacity: 0.8;
+}
+.nv-ed-course-form input,
+.nv-ed-course-form textarea {
+  border-color: rgba(148, 163, 184, 0.2);
+  background-color: rgba(7, 10, 22, 0.72);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.nv-ed-course-form input:focus,
+.nv-ed-course-form textarea:focus {
+  border-color: rgba(129, 140, 248, 0.8);
+  background-color: rgba(10, 13, 29, 0.98);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.11);
+}
+.nv-ed-course-card,
+.nv-ed-metric,
+.nv-ed-chart,
+.nv-ed-enrollments {
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.nv-ed-course-card:hover,
+.nv-ed-chart:hover,
+.nv-ed-enrollments:hover {
+  border-color: rgba(129, 140, 248, 0.27) !important;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.22), 0 0 28px rgba(79, 70, 229, 0.045);
+}
+.nv-ed-metric:hover {
+  border-color: rgba(129, 140, 248, 0.38) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 0 26px rgba(99, 102, 241, 0.07);
+}
+.nv-ed-metric > div:first-child > span {
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.08);
+}
+.nv-ed-summary > article:nth-child(2) { animation-delay: 70ms; }
+.nv-ed-summary > article:nth-child(3) { animation-delay: 140ms; }
+.nv-ed-summary > article:nth-child(4) { animation-delay: 210ms; }
+.nv-ed-summary > article:nth-child(5) { animation-delay: 280ms; }
+.nv-ed-summary > article { animation: nv-ed-enter 550ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+.nv-ed-progress-fill {
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.32);
+}
+.nv-ed-enrollments article { transition: background-color 180ms ease; }
+.nv-ed-enrollments article:hover { background-color: rgba(99, 102, 241, 0.045); }
+
+.nv-educator-dashboard [data-ed-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 550ms ease, transform 550ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.nv-educator-dashboard [data-ed-reveal].nv-ed-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.nv-educator-dashboard [data-ed-reveal] .nv-ed-course-card {
+  animation: nv-ed-enter 500ms ease both;
+}
+.nv-educator-dashboard button:disabled {
+  filter: saturate(0.72);
+}
+
+@keyframes nv-ed-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .nv-ed-header { border-radius: 1.15rem; }
+  .nv-ed-summary { gap: 0.75rem; }
+  .nv-ed-course-card { padding: 1rem; }
+  .nv-ed-course-card > div:last-of-type { gap: 0.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nv-ed-header,
+  .nv-ed-summary > article,
+  .nv-educator-dashboard [data-ed-reveal] .nv-ed-course-card {
+    animation: none !important;
+  }
+  .nv-educator-dashboard *,
+  .nv-educator-dashboard *::before,
+  .nv-educator-dashboard *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .nv-educator-dashboard [data-ed-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}

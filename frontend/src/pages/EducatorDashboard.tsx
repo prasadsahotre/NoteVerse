@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { apiRequest } from '../api/client'
 import { Link, useNavigate } from 'react-router-dom'
+import './EducatorDashboard.css'
 
 interface EducatorCourseAnalytics {
   courseId: number
@@ -67,6 +68,29 @@ function EducatorDashboard() {
   const [description, setDescription] = useState('')
   const [formError, setFormError] = useState('')
   const [feedback, setFeedback] = useState('')
+
+  useEffect(() => {
+    const elements = document.querySelectorAll<HTMLElement>('.nv-educator-dashboard [data-ed-reveal]')
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      elements.forEach((element) => element.classList.add('nv-ed-visible'))
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('nv-ed-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.08 },
+    )
+
+    elements.forEach((element) => observer.observe(element))
+    return () => observer.disconnect()
+  }, [])
   const isApprovedEducator = Boolean(
     user?.id && user.educatorApprovalStatus === 'APPROVED',
   )
@@ -265,9 +289,9 @@ function EducatorDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 px-4 py-8 text-white sm:px-6 lg:py-12">
-      <main className="mx-auto max-w-7xl">
-        <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+    <div className="nv-educator-dashboard min-h-screen bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 px-4 py-8 text-white sm:px-6 lg:py-12">
+      <main className="nv-ed-main mx-auto max-w-7xl">
+        <header className="nv-ed-header flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-indigo-300">
               <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" /> Educator insights
@@ -285,7 +309,7 @@ function EducatorDashboard() {
           </button>
         </header>
 
-        <section aria-labelledby="my-courses-heading" className="mt-10">
+        <section data-ed-reveal aria-labelledby="my-courses-heading" className="nv-ed-section mt-10">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Course workspace</p>
             <h2 id="my-courses-heading" className="mt-2 text-2xl font-bold tracking-tight">My Courses</h2>
@@ -293,7 +317,7 @@ function EducatorDashboard() {
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
-            <form onSubmit={handleCourseSubmit} className="h-fit rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+            <form onSubmit={handleCourseSubmit} className="nv-ed-panel nv-ed-course-form h-fit rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
               <h3 className="text-lg font-semibold text-white">
                 {editingCourseId === null ? 'Create a course' : 'Edit course'}
               </h3>
@@ -385,7 +409,7 @@ function EducatorDashboard() {
               {coursesQuery.data && coursesQuery.data.length > 0 && (
                 <div className="space-y-3">
                   {coursesQuery.data.map((course) => (
-                    <article key={course.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+                    <article data-ed-reveal key={course.id} className="nv-ed-panel nv-ed-course-card rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
                       {editingCourseId === course.id ? (
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Editing this course</p>
                       ) : null}
@@ -475,7 +499,7 @@ function EducatorDashboard() {
 
         {analyticsQuery.data && (
           <>
-            <section aria-label="Analytics summary" className="mt-9 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <section data-ed-reveal aria-label="Analytics summary" className="nv-ed-summary mt-9 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <SummaryCard label="Total courses" value={analyticsQuery.data.totalCourses} icon="courses" accent="indigo" />
               <SummaryCard label="Published courses" value={analyticsQuery.data.publishedCourses} icon="published" accent="cyan" />
               <SummaryCard label="Enrollments" value={analyticsQuery.data.totalEnrollments} icon="enrollments" accent="violet" />
@@ -483,7 +507,7 @@ function EducatorDashboard() {
               <SummaryCard label="Overall completion" value={`${analyticsQuery.data.overallCompletionRate}%`} icon="completion" accent="amber" />
             </section>
 
-            <section className="mt-12">
+            <section data-ed-reveal className="nv-ed-section mt-12">
               <div className="mb-5">
                 <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">At a glance</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-tight">Course performance</h2>
@@ -498,7 +522,7 @@ function EducatorDashboard() {
                   <CourseBarChart title="Completion rate by course" courses={analyticsQuery.data.courses} metric="completionRate" color="bg-cyan-400" />
                   <CourseBarChart title="Average quiz score" courses={analyticsQuery.data.courses.filter((course) => course.quizAttempts > 0)} metric="averageQuizScore" color="bg-violet-400" emptyMessage="Quiz scores will appear after students submit quizzes." />
 
-                  <article className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+                  <article className="nv-ed-panel nv-ed-chart rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
                     <h3 className="font-semibold text-white">Course details</h3>
                     <p className="mt-1 text-sm text-slate-500">Progress, learning activity, and learner feedback</p>
                     <div className="mt-5 space-y-3">
@@ -515,7 +539,7 @@ function EducatorDashboard() {
                             <span className="font-semibold text-slate-200">{course.completionRate}% <span className="font-normal text-slate-500">· {course.completedStudents} students</span></span>
                           </div>
                           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
-                            <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, course.completionRate))}%` }} />
+                            <div className="nv-ed-progress-fill h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, course.completionRate))}%` }} />
                           </div>
                           <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/[0.06] pt-3 text-xs">
                             <div><p className="text-slate-500">Enrolled</p><p className="mt-1 font-semibold text-slate-200">{course.enrollments}</p></div>
@@ -530,7 +554,7 @@ function EducatorDashboard() {
               )}
             </section>
 
-            <section className="mt-12">
+            <section data-ed-reveal className="nv-ed-section mt-12">
               <div className="mb-5">
                 <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Your community</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-tight">Recent enrollments</h2>
@@ -540,7 +564,7 @@ function EducatorDashboard() {
                   No students have enrolled in your courses yet.
                 </p>
               ) : (
-                  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+                  <div className="nv-ed-panel nv-ed-enrollments overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
                   <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_minmax(130px,0.7fr)] gap-4 border-b border-slate-800 bg-slate-800/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-300 sm:grid">
                     <span>Student</span><span>Course</span><span>Enrolled</span>
                   </div>
@@ -592,7 +616,7 @@ function SummaryCard({
   }
 
   return (
-    <article className="rounded-2xl border border-slate-700 bg-slate-900 bg-gradient-to-br from-white/[0.07] to-white/[0.025] p-5 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-slate-600 sm:p-6">
+    <article className="nv-ed-panel nv-ed-metric rounded-2xl border border-slate-700 bg-slate-900 bg-gradient-to-br from-white/[0.07] to-white/[0.025] p-5 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-slate-600 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-slate-400">{label}</p>
         <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${accentStyles[accent]}`}>
@@ -623,7 +647,7 @@ function CourseBarChart({
     : 100
 
   return (
-    <article className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+    <article className="nv-ed-panel nv-ed-chart rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
       <h3 className="font-semibold text-white">{title}</h3>
       {courses.length === 0 ? (
         <p className="mt-5 text-sm text-slate-500">{emptyMessage}</p>

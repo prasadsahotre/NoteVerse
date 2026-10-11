@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import './AdminDashboard.css'
 import { apiRequest } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 
@@ -113,6 +114,29 @@ function AdminDashboard() {
   const [reportStatusFilter, setReportStatusFilter] = useState<'ALL' | ReportStatus>('ALL')
   const [reportCandidate, setReportCandidate] = useState<AdminReport | null>(null)
   const [reportFeedback, setReportFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+
+  useEffect(() => {
+    const elements = document.querySelectorAll<HTMLElement>('.nv-admin-dashboard [data-admin-reveal]')
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      elements.forEach((element) => element.classList.add('nv-admin-visible'))
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('nv-admin-visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.06 },
+    )
+
+    elements.forEach((element) => observer.observe(element))
+    return () => observer.disconnect()
+  }, [])
 
   const analyticsQuery = useQuery({
     queryKey: ['admin-analytics'],
@@ -248,9 +272,9 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:py-12">
+    <div className="nv-admin-dashboard min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:py-12">
       <main className="mx-auto max-w-7xl">
-        <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+        <header className="nv-admin-header flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">NoteVerse administration</p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Platform overview</h1>
@@ -264,7 +288,7 @@ function AdminDashboard() {
           </button>
         </header>
 
-        <section className="mt-10" aria-labelledby="platform-metrics-heading">
+        <section data-admin-reveal className="nv-admin-section mt-10" aria-labelledby="platform-metrics-heading">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Platform metrics</p>
@@ -283,7 +307,7 @@ function AdminDashboard() {
           )}
           {analyticsQuery.data && (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="nv-admin-metrics grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <MetricCard label="Total users" value={analyticsQuery.data.totalUsers} tone="indigo" />
                 <MetricCard label="Students" value={analyticsQuery.data.totalStudents} tone="cyan" />
                 <MetricCard label="Educators" value={analyticsQuery.data.totalEducators} tone="violet" />
@@ -301,7 +325,7 @@ function AdminDashboard() {
           )}
         </section>
 
-        <section className="mt-14" aria-labelledby="educator-applications-heading">
+        <section data-admin-reveal className="nv-admin-section mt-14" aria-labelledby="educator-applications-heading">
           <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Review queue</p>
@@ -337,13 +361,13 @@ function AdminDashboard() {
             </div>
           )}
           {applicationsQuery.data && applicationsQuery.data.length > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+            <div className="nv-admin-panel nv-admin-table overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
               <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(130px,0.8fr)_minmax(190px,0.9fr)] gap-4 border-b border-slate-800 bg-slate-800/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-300 md:grid">
                 <span>Applicant</span><span>Email</span><span>Status</span><span className="text-right">Actions</span>
               </div>
               <div className="divide-y divide-slate-800">
                 {applicationsQuery.data.map((application) => (
-                  <article key={application.id} className="grid gap-4 px-5 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(130px,0.8fr)_minmax(190px,0.9fr)] md:items-center">
+                  <article key={application.id} className="nv-admin-row grid gap-4 px-5 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(130px,0.8fr)_minmax(190px,0.9fr)] md:items-center">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-100" title={application.name}>{application.name}</p>
                       <p className="mt-1 text-xs text-slate-500">Applied {new Date(application.createdAt).toLocaleDateString()}</p>
@@ -383,7 +407,7 @@ function AdminDashboard() {
           )}
         </section>
 
-        <section className="mt-14" aria-labelledby="user-management-heading">
+        <section data-admin-reveal className="nv-admin-section mt-14" aria-labelledby="user-management-heading">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Platform accounts</p>
             <h2 id="user-management-heading" className="mt-2 text-xl font-semibold sm:text-2xl">User management</h2>
@@ -401,7 +425,7 @@ function AdminDashboard() {
           )}
           {usersQuery.data && (
             <>
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="nv-admin-panel nv-admin-filters mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="sm:col-span-2 lg:col-span-1">
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search name or email</span>
                   <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} type="search" placeholder="Search users" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
@@ -440,7 +464,7 @@ function AdminDashboard() {
                     <p className="mt-1 text-sm text-slate-400">Try changing the search or filters.</p>
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+                  <div className="nv-admin-panel nv-admin-table overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
                     <div className="hidden grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(100px,0.7fr)_minmax(130px,0.8fr)_minmax(180px,1fr)] gap-4 border-b border-slate-800 bg-slate-800/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-300 lg:grid">
                       <span>Name</span><span>Email</span><span>Role</span><span>Educator status</span><span className="text-right">Role action</span>
                     </div>
@@ -450,7 +474,7 @@ function AdminDashboard() {
                         const isAdmin = user.roles.includes('ADMIN')
                         const nextRole = role === 'EDUCATOR' ? 'STUDENT' : 'EDUCATOR'
                         return (
-                          <article key={user.id} className="grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(100px,0.7fr)_minmax(130px,0.8fr)_minmax(180px,1fr)] lg:items-center">
+                          <article key={user.id} className="nv-admin-row grid gap-4 px-5 py-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(100px,0.7fr)_minmax(130px,0.8fr)_minmax(180px,1fr)] lg:items-center">
                             <div className="min-w-0"><p className="truncate font-semibold text-slate-100" title={user.name}>{user.name}</p></div>
                             <p className="break-all text-sm text-slate-300">{user.email}</p>
                             <div><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${role === 'ADMIN' ? 'border-violet-400/20 bg-violet-400/10 text-violet-200' : role === 'EDUCATOR' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-200' : 'border-indigo-400/20 bg-indigo-400/10 text-indigo-200'}`}>{role === 'ADMIN' ? 'Administrator' : role === 'EDUCATOR' ? 'Educator' : 'Student'}</span></div>
@@ -475,7 +499,7 @@ function AdminDashboard() {
           )}
         </section>
 
-        <section className="mt-14" aria-labelledby="course-moderation-heading">
+        <section data-admin-reveal className="nv-admin-section mt-14" aria-labelledby="course-moderation-heading">
           <div className="mb-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Content oversight</p>
             <h2 id="course-moderation-heading" className="mt-2 text-xl font-semibold sm:text-2xl">Course moderation</h2>
@@ -500,7 +524,7 @@ function AdminDashboard() {
           )}
           {coursesQuery.data && (
             <>
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="nv-admin-panel nv-admin-filters mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
                 <label>
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search courses or educators</span>
                   <input value={courseSearch} onChange={(event) => setCourseSearch(event.target.value)} type="search" placeholder="Course title, description, educator" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
@@ -533,7 +557,7 @@ function AdminDashboard() {
                 ) : (
                   <div className="space-y-3">
                     {filteredCourses.map((course) => (
-                      <article key={course.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6">
+                      <article className="nv-admin-panel nv-admin-content-card rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6" key={course.id}>
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-3">
@@ -562,7 +586,7 @@ function AdminDashboard() {
           )}
         </section>
 
-        <section className="mt-14" aria-labelledby="reports-heading">
+        <section data-admin-reveal className="nv-admin-section mt-14" aria-labelledby="reports-heading">
           <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">Community safety</p>
@@ -588,7 +612,7 @@ function AdminDashboard() {
           )}
           {reportsQuery.data && (
             <>
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="nv-admin-panel nv-admin-filters mb-4 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
                 <label>
                   <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search reports</span>
                   <input value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} type="search" placeholder="Reason, details, reporter, or content" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20" />
@@ -629,7 +653,7 @@ function AdminDashboard() {
                           ? { type: 'Course', title: report.course.title }
                           : null
                       return (
-                        <article key={report.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6">
+                        <article className="nv-admin-panel nv-admin-content-card rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/10 sm:p-6" key={report.id}>
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-3">
@@ -749,7 +773,7 @@ function MetricCard({
   }
 
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-slate-700 sm:p-6">
+    <article className="nv-admin-panel nv-admin-metric relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-slate-700 sm:p-6">
       <div className={`absolute inset-x-0 top-0 h-0.5 ${accents[tone]}`} />
       <p className="text-sm font-medium text-slate-400">{label}</p>
       <p className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">{value.toLocaleString()}</p>
