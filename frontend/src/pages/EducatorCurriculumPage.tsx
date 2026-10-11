@@ -553,6 +553,8 @@ function EducatorCurriculumPage() {
                                   </section>
                                 )
                               })()}
+
+                              <QuizManager lessonId={lesson.id} lessonTitle={lesson.title} />
                             </li>
                           ))}
                         </ol>
@@ -657,6 +659,254 @@ function FormActions({ onCancel, pending, submitLabel }: { onCancel: () => void;
       </button>
       <button type="button" onClick={onCancel} disabled={pending} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">Cancel</button>
     </div>
+  )
+}
+
+
+type QuizOption = { id?: number; text: string; isCorrect: boolean }
+type EducatorQuizQuestion = { id: number; question: string; options: QuizOption[] }
+type EducatorQuiz = {
+  id: number
+  title: string
+  questions: EducatorQuizQuestion[]
+  _count: { attempts: number }
+}
+type QuizListResponse = { success: boolean; message?: string; data: EducatorQuiz[] }
+type QuizCreateQuestionResponse = { success: boolean; message?: string; data: EducatorQuizQuestion }
+type QuizFormOption = { text: string; isCorrect: boolean }
+
+const emptyQuizOptions = (): QuizFormOption[] => [
+  { text: '', isCorrect: true },
+  { text: '', isCorrect: false },
+  { text: '', isCorrect: false },
+  { text: '', isCorrect: false },
+]
+
+function QuizManager({ lessonId, lessonTitle }: { lessonId: number; lessonTitle: string }) {
+  const queryClient = useQueryClient()
+  const [quizTitle, setQuizTitle] = useState('')
+  const [editingQuizId, setEditingQuizId] = useState<number | null>(null)
+  const [editingQuizTitle, setEditingQuizTitle] = useState('')
+  const [questionQuizId, setQuestionQuizId] = useState<number | null>(null)
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
+  const [questionText, setQuestionText] = useState('')
+  const [questionOptions, setQuestionOptions] = useState<QuizFormOption[]>(emptyQuizOptions)
+  const [formError, setFormError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const quizzesQuery = useQuery({
+    queryKey: ['educator-quizzes', lessonId],
+    queryFn: async () => {
+      const response = await apiRequest<QuizListResponse>(`/quizzes/lesson/${lessonId}`)
+      return response.data
+    },
+  })
+
+  const refreshQuizzes = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['educator-quizzes', lessonId] })
+  }
+
+  const createQuizMutation = useMutation({
+    mutationFn: (title: string) => apiRequest<MutationResponse>('/quizzes', {
+      method: 'POST',
+      body: JSON.stringify({ title, lessonId }),
+    }),
+    onSuccess: async (response) => {
+      setQuizTitle('')
+      setNotice(response.message || 'Quiz created successfully.')
+      setFormError('')
+      await refreshQuizzes()
+    },
+  })
+
+  const updateQuizMutation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) => apiRequest<MutationResponse>(`/quizzes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
+    onSuccess: async (response) => {
+      setEditingQuizId(null)
+      setNotice(response.message || 'Quiz title updated successfully.')
+      setFormError('')
+      await refreshQuizzes()
+    },
+  })
+
+  const deleteQuizMutation = useMutation({
+    mutationFn: (id: number) => apiRequest<MutationResponse>(`/quizzes/${id}`, { method: 'DELETE' }),
+    onSuccess: async (response) => {
+      setNotice(response.message || 'Quiz deleted successfully.')
+      await refreshQuizzes()
+    },
+  })
+
+  const saveQuestionMutation = useMutation({
+    mutationFn: (values: { quizId: number; questionId: number | null; question: string; options: QuizFormOption[] }) => {
+      const body = JSON.stringify({ question: values.question, options: values.options })
+      return values.questionId === null
+        ? apiRequest<QuizCreateQuestionResponse>('/quizzes/questions', {
+            method: 'POST',
+            body: JSON.stringify({ quizId: values.quizId, question: values.question, options: values.options }),
+          })
+        : apiRequest<QuizCreateQuestionResponse>(`/quizzes/questions/${values.questionId}`, {
+            method: 'PATCH',
+            body,
+          })
+    },
+    onSuccess: async (response) => {
+      setQuestionQuizId(null)
+      setEditingQuestionId(null)
+      setQuestionText('')
+      setQuestionOptions(emptyQuizOptions())
+      setFormError('')
+      setNotice(response.message || 'Question saved successfully.')
+      await refreshQuizzes()
+    },
+  })
+
+  const deleteQuestionMutation = useMutation({
+    mutationFn: (id: number) => apiRequest<MutationResponse>(`/quizzes/questions/${id}`, { method: 'DELETE' }),
+    onSuccess: async (response) => {
+      setNotice(response.message || 'Question deleted successfully.')
+      await refreshQuizzes()
+    },
+  })
+
+  const mutationError = createQuizMutation.error || updateQuizMutation.error || deleteQuizMutation.error || saveQuestionMutation.error || deleteQuestionMutation.error
+  const pending = createQuizMutation.isPending || updateQuizMutation.isPending || deleteQuizMutation.isPending || saveQuestionMutation.isPending || deleteQuestionMutation.isPending
+
+  const beginQuestionForm = (quiz: EducatorQuiz, question?: EducatorQuizQuestion) => {
+    setFormError('')
+    setNotice('')
+    setQuestionQuizId(quiz.id)
+    setEditingQuestionId(question?.id ?? null)
+    setQuestionText(question?.question ?? '')
+    setQuestionOptions(question ? question.options.map((option) => ({ text: option.text, isCorrect: option.isCorrect })) : emptyQuizOptions())
+  }
+
+  const submitQuestion = (event: FormEvent<HTMLFormElement>, quizId: number) => {
+    event.preventDefault()
+    setFormError('')
+    setNotice('')
+    if (!questionText.trim()) return setFormError('Enter the question text.')
+    if (questionOptions.some((option) => !option.text.trim())) return setFormError('Fill in all four answer options.')
+    if (questionOptions.filter((option) => option.isCorrect).length !== 1) return setFormError('Select exactly one correct answer.')
+    saveQuestionMutation.mutate({ quizId, questionId: editingQuestionId, question: questionText.trim(), options: questionOptions.map((option) => ({ ...option, text: option.text.trim() })) })
+  }
+
+  return (
+    <section aria-label={`Quiz management for ${lessonTitle}`} className="mt-5 border-t border-slate-800 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h5 className="text-sm font-semibold text-indigo-200">Quiz management</h5>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Create lesson quizzes and manage four-option multiple-choice questions.</p>
+        </div>
+        <span className="rounded-full border border-indigo-400/20 bg-indigo-400/[0.07] px-2.5 py-1 text-xs font-medium text-indigo-200">Lesson quiz</span>
+      </div>
+
+      {notice && <p role="status" className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-2 text-sm text-emerald-200">{notice}</p>}
+      {mutationError && <p role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/[0.07] px-3 py-2 text-sm text-red-200">{mutationError instanceof Error ? mutationError.message : 'The quiz change could not be completed.'}</p>}
+      {formError && <p role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/[0.07] px-3 py-2 text-sm text-red-200">{formError}</p>}
+
+      <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => {
+        event.preventDefault()
+        const title = quizTitle.trim()
+        if (!title) return setFormError('Enter a quiz title.')
+        setFormError('')
+        setNotice('')
+        createQuizMutation.mutate(title)
+      }}>
+        <label htmlFor={`quiz-title-${lessonId}`} className="sr-only">New quiz title</label>
+        <input id={`quiz-title-${lessonId}`} value={quizTitle} onChange={(event) => setQuizTitle(event.target.value)} placeholder="e.g. Lesson practice quiz" required className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+        <button type="submit" disabled={pending} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60">{createQuizMutation.isPending ? 'Creating…' : 'Create quiz'}</button>
+      </form>
+
+      {quizzesQuery.isLoading && <p role="status" className="mt-4 text-sm text-slate-500">Loading quizzes…</p>}
+      {quizzesQuery.isError && <div role="alert" className="mt-4 rounded-lg border border-red-400/20 bg-red-400/[0.07] p-3 text-sm text-red-200"><p>{quizzesQuery.error instanceof Error ? quizzesQuery.error.message : 'Unable to load quizzes.'}</p><button type="button" onClick={() => void quizzesQuery.refetch()} className="mt-2 underline">Try again</button></div>}
+      {quizzesQuery.data?.length === 0 && <p className="mt-4 rounded-xl border border-dashed border-slate-700 px-4 py-5 text-center text-sm text-slate-500">No quizzes for this lesson yet. Create one above.</p>}
+
+      <div className="mt-4 space-y-3">
+        {quizzesQuery.data?.map((quiz, quizIndex) => {
+          const locked = quiz._count.attempts > 0
+          return (
+            <article key={quiz.id} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60">
+              <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-400/10 text-xs font-bold text-indigo-200">{quizIndex + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    {editingQuizId === quiz.id ? (
+                      <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(event) => {
+                        event.preventDefault()
+                        if (!editingQuizTitle.trim()) return setFormError('Enter a quiz title.')
+                        updateQuizMutation.mutate({ id: quiz.id, title: editingQuizTitle.trim() })
+                      }}>
+                        <label htmlFor={`edit-quiz-title-${quiz.id}`} className="sr-only">Quiz title</label>
+                        <input id={`edit-quiz-title-${quiz.id}`} value={editingQuizTitle} onChange={(event) => setEditingQuizTitle(event.target.value)} required className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400" />
+                        <button type="submit" disabled={pending} className="rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-400 disabled:opacity-60">Save title</button>
+                        <button type="button" onClick={() => setEditingQuizId(null)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">Cancel</button>
+                      </form>
+                    ) : <h6 className="break-words font-semibold text-slate-100">{quiz.title}</h6>}
+                    <p className="mt-1 text-xs text-slate-500">{quiz.questions.length} {quiz.questions.length === 1 ? 'question' : 'questions'} · {quiz._count.attempts} {quiz._count.attempts === 1 ? 'student attempt' : 'student attempts'}</p>
+                    {locked && <p className="mt-2 text-xs leading-5 text-amber-200/80">Structure locked because students have attempted this quiz. This protects score history.</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={locked || pending} onClick={() => { setEditingQuizId(quiz.id); setEditingQuizTitle(quiz.title); setFormError(''); setNotice('') }} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">Rename</button>
+                  <button type="button" disabled={locked || pending} onClick={() => { if (window.confirm(`Delete quiz “${quiz.title}”? This cannot be undone.`)) deleteQuizMutation.mutate(quiz.id) }} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40">Delete quiz</button>
+                </div>
+              </div>
+
+              <div className="space-y-3 px-4 pb-4">
+                {quiz.questions.map((question, questionIndex) => (
+                  <div key={question.id} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-6 text-slate-100"><span className="mr-2 text-xs font-bold text-indigo-300">Q{questionIndex + 1}</span>{question.question}</p>
+                        <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {question.options.map((option, optionIndex) => (
+                            <li key={option.id ?? `${question.id}-${optionIndex}`} className={`rounded-lg border px-3 py-2 text-xs leading-5 ${option.isCorrect ? 'border-emerald-400/25 bg-emerald-400/[0.06] text-emerald-200' : 'border-slate-800 text-slate-400'}`}>
+                              <span className="mr-2 font-semibold">{String.fromCharCode(65 + optionIndex)}.</span>{option.text}{option.isCorrect && <span className="ml-2 text-[10px] font-bold uppercase tracking-wide">Correct</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button type="button" disabled={locked || pending} onClick={() => beginQuestionForm(quiz, question)} className="rounded-lg border border-indigo-400/30 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-400/10 disabled:cursor-not-allowed disabled:opacity-40">Edit</button>
+                        <button type="button" disabled={locked || pending} onClick={() => { if (window.confirm('Delete this question? This cannot be undone.')) deleteQuestionMutation.mutate(question.id) }} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40">Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {questionQuizId === quiz.id ? (
+                  <form className="rounded-xl border border-indigo-400/20 bg-indigo-400/[0.035] p-4" onSubmit={(event) => submitQuestion(event, quiz.id)}>
+                    <h6 className="font-semibold text-white">{editingQuestionId === null ? 'Add question' : 'Edit question'}</h6>
+                    <label htmlFor={`quiz-question-${quiz.id}`} className="mt-3 block text-xs font-medium text-slate-300">Question text</label>
+                    <textarea id={`quiz-question-${quiz.id}`} rows={3} value={questionText} onChange={(event) => setQuestionText(event.target.value)} required className="mt-2 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm leading-6 text-white outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20" />
+                    <p className="mt-4 text-xs font-medium text-slate-300">Answer options <span className="font-normal text-slate-500">(select the one correct answer)</span></p>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      {questionOptions.map((option, optionIndex) => (
+                        <div key={optionIndex} className={`rounded-lg border p-3 ${option.isCorrect ? 'border-indigo-400/40 bg-indigo-400/[0.06]' : 'border-slate-800 bg-slate-950/50'}`}>
+                          <label htmlFor={`quiz-${quiz.id}-option-${optionIndex}`} className="block text-xs font-medium text-slate-400">Option {String.fromCharCode(65 + optionIndex)}</label>
+                          <input id={`quiz-${quiz.id}-option-${optionIndex}`} value={option.text} onChange={(event) => setQuestionOptions((current) => current.map((item, index) => index === optionIndex ? { ...item, text: event.target.value } : item))} required className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400" />
+                          <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-slate-300"><input type="radio" name={`correct-option-${quiz.id}`} checked={option.isCorrect} onChange={() => setQuestionOptions((current) => current.map((item, index) => ({ ...item, isCorrect: index === optionIndex })))} className="accent-indigo-400" /> Correct answer</label>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="submit" disabled={pending} className="rounded-lg bg-indigo-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-indigo-400 disabled:opacity-60">{saveQuestionMutation.isPending ? 'Saving…' : editingQuestionId === null ? 'Add question' : 'Save question'}</button>
+                      <button type="button" disabled={pending} onClick={() => { setQuestionQuizId(null); setEditingQuestionId(null); setFormError('') }} className="rounded-lg border border-slate-700 px-4 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-60">Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button type="button" disabled={locked || pending} onClick={() => beginQuestionForm(quiz)} className="w-full rounded-lg border border-dashed border-indigo-400/30 px-3 py-3 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-400/[0.06] disabled:cursor-not-allowed disabled:opacity-40">+ Add question</button>
+                )}
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
