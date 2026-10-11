@@ -287,6 +287,235 @@ router.post(
   },
 )
 
+// List quizzes for a lesson (approved educator who owns the course only).
+// Correct-answer flags are intentionally available only through this educator route.
+router.get(
+  '/lesson/:lessonId',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const lessonId = Number(req.params.lessonId)
+      if (!Number.isInteger(lessonId) || lessonId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid lesson ID' })
+      }
+
+      const lesson = await prisma.lesson.findUnique({
+        where: { id: lessonId },
+        include: { module: { select: { course: { select: { educatorId: true } } } } },
+      })
+      if (!lesson) {
+        return res.status(404).json({ success: false, message: 'Lesson not found' })
+      }
+      if (lesson.module.course.educatorId !== Number(req.user!.userId)) {
+        return res.status(403).json({ success: false, message: 'You can only manage quizzes in your own courses' })
+      }
+
+      const quizzes = await prisma.quiz.findMany({
+        where: { lessonId },
+        orderBy: { id: 'asc' },
+        include: {
+          questions: {
+            orderBy: { id: 'asc' },
+            include: { options: { orderBy: { id: 'asc' }, select: { id: true, text: true, isCorrect: true } } },
+          },
+          _count: { select: { attempts: true } },
+        },
+      })
+      return res.json({ success: true, data: quizzes })
+    } catch (error) {
+      console.error('Failed to list lesson quizzes:', error)
+      return res.status(500).json({ success: false, message: 'Failed to fetch lesson quizzes' })
+    }
+  },
+)
+
+// Update a quiz title. Quiz structure is locked after the first attempt to protect score history.
+router.patch(
+  '/:id',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const quizId = Number(req.params.id)
+      const { title } = req.body
+      if (!Number.isInteger(quizId) || quizId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid quiz ID' })
+      }
+      if (typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ success: false, message: 'Title is required' })
+      }
+
+      const quiz = await prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: { lesson: { include: { module: { include: { course: { select: { educatorId: true } } } } } } },
+      })
+      if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found' })
+      if (quiz.lesson.module.course.educatorId !== Number(req.user!.userId)) {
+        return res.status(403).json({ success: false, message: 'You can only edit quizzes in your own courses' })
+      }
+      if (await prisma.quizAttempt.count({ where: { quizId } })) {
+        return res.status(409).json({ success: false, message: 'This quiz has student attempts and is locked to preserve score history.' })
+      }
+
+      const updated = await prisma.quiz.update({ where: { id: quizId }, data: { title: title.trim() } })
+      return res.json({ success: true, message: 'Quiz updated successfully', data: updated })
+    } catch (error) {
+      console.error('Failed to update quiz:', error)
+      return res.status(500).json({ success: false, message: 'Failed to update quiz' })
+    }
+  },
+)
+
+// Update a question and its four options. Locked after attempts exist.
+router.patch(
+  '/questions/:id',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const questionId = Number(req.params.id)
+      const { question, options } = req.body
+      if (!Number.isInteger(questionId) || questionId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid question ID' })
+      }
+      if (typeof question !== 'string' || !question.trim()) {
+        return res.status(400).json({ success: false, message: 'Question is required' })
+      }
+      if (!Array.isArray(options) || options.length !== 4 || options.some((option: { text?: unknown; isCorrect?: unknown }) =>
+        typeof option !== 'object' || option === null || typeof option.text !== 'string' ||
+        !option.text.trim() || typeof option.isCorrect !== 'boolean'
+      )) {
+        return res.status(400).json({ success: false, message: 'Exactly 4 options with non-empty text and boolean isCorrect values are required' })
+      }
+      if (options.filter((option: { isCorrect: boolean }) => option.isCorrect).length !== 1) {
+        return res.status(400).json({ success: false, message: 'Exactly one option must be correct' })
+      }
+
+      const existing = await prisma.question.findUnique({
+        where: { id: questionId },
+        include: {
+          quiz: {
+            include: {
+              lesson: {
+                include: {
+                  module: { include: { course: { select: { educatorId: true } } } },
+                },
+              },
+            },
+          },
+        },
+      })
+      if (!existing) return res.status(404).json({ success: false, message: 'Question not found' })
+      if (existing.quiz.lesson.module.course.educatorId !== Number(req.user!.userId)) {
+        return res.status(403).json({ success: false, message: 'You can only edit questions in your own courses' })
+      }
+      if (await prisma.quizAttempt.count({ where: { quizId: existing.quizId } })) {
+        return res.status(409).json({ success: false, message: 'This quiz has student attempts and its questions are locked to preserve score history.' })
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.option.deleteMany({ where: { questionId } })
+        return tx.question.update({
+          where: { id: questionId },
+          data: {
+            question: question.trim(),
+            options: { create: options.map((option: { text: string; isCorrect: boolean }) => ({ text: option.text.trim(), isCorrect: option.isCorrect })) },
+          },
+          include: { options: { orderBy: { id: 'asc' } } },
+        })
+      })
+      return res.json({ success: true, message: 'Question updated successfully', data: updated })
+    } catch (error) {
+      console.error('Failed to update question:', error)
+      return res.status(500).json({ success: false, message: 'Failed to update question' })
+    }
+  },
+)
+
+// Delete a question only before the quiz has any attempts.
+router.delete(
+  '/questions/:id',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const questionId = Number(req.params.id)
+      if (!Number.isInteger(questionId) || questionId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid question ID' })
+      }
+      const question = await prisma.question.findUnique({
+        where: { id: questionId },
+        include: {
+          quiz: {
+            include: {
+              lesson: {
+                include: {
+                  module: { include: { course: { select: { educatorId: true } } } },
+                },
+              },
+            },
+          },
+        },
+      })
+      if (!question) return res.status(404).json({ success: false, message: 'Question not found' })
+      if (question.quiz.lesson.module.course.educatorId !== Number(req.user!.userId)) {
+        return res.status(403).json({ success: false, message: 'You can only delete questions in your own courses' })
+      }
+      if (await prisma.quizAttempt.count({ where: { quizId: question.quizId } })) {
+        return res.status(409).json({ success: false, message: 'This quiz has student attempts; questions cannot be deleted.' })
+      }
+      await prisma.question.delete({ where: { id: questionId } })
+      return res.json({ success: true, message: 'Question deleted successfully' })
+    } catch (error) {
+      console.error('Failed to delete question:', error)
+      return res.status(500).json({ success: false, message: 'Failed to delete question' })
+    }
+  },
+)
+
+// Delete a quiz only when no student attempt history exists.
+router.delete(
+  '/:id',
+  authenticateToken,
+  requireRole('EDUCATOR'),
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
+    try {
+      const quizId = Number(req.params.id)
+      if (!Number.isInteger(quizId) || quizId < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid quiz ID' })
+      }
+      const quiz = await prisma.quiz.findUnique({
+        where: { id: quizId },
+        include: {
+          lesson: {
+            include: {
+              module: { include: { course: { select: { educatorId: true } } } },
+            },
+          },
+        },
+      })
+      if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found' })
+      if (quiz.lesson.module.course.educatorId !== Number(req.user!.userId)) {
+        return res.status(403).json({ success: false, message: 'You can only delete quizzes in your own courses' })
+      }
+      if (await prisma.quizAttempt.count({ where: { quizId } })) {
+        return res.status(409).json({ success: false, message: 'This quiz has student attempts and cannot be deleted because that would erase score history.' })
+      }
+      await prisma.quiz.delete({ where: { id: quizId } })
+      return res.json({ success: true, message: 'Quiz deleted successfully' })
+    } catch (error) {
+      console.error('Failed to delete quiz:', error)
+      return res.status(500).json({ success: false, message: 'Failed to delete quiz' })
+    }
+  },
+)
+
 // Get all attempts for the logged-in student
 
 router.get(
