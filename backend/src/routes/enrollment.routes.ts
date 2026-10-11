@@ -5,6 +5,7 @@ import {
   AuthRequest,
 } from '../middleware/auth.middleware.js'
 import { requireRole } from '../middleware/role.middleware.js'
+import { requireApprovedEducator } from '../middleware/approvedEducator.middleware.js'
 
 const router = Router()
 
@@ -13,9 +14,15 @@ router.get(
   '/',
   authenticateToken,
   requireRole('EDUCATOR'),
-  async (_req, res) => {
+  requireApprovedEducator,
+  async (req: AuthRequest, res) => {
     try {
       const enrollments = await prisma.enrollment.findMany({
+        where: {
+          course: {
+            is: { educatorId: req.user!.userId },
+          },
+        },
         orderBy: {
           createdAt: 'desc',
         },

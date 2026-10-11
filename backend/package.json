@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test dist/routes/enrollment.routes.test.js",
     "lint": "eslint ."
   },
   "dependencies": {
