@@ -1,5 +1,5 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import './StudentDashboard.css'
@@ -30,10 +30,96 @@ interface Certificate {
   }
 }
 
+type LiveSessionType = 'TEST' | 'DOUBT_SOLVING' | 'GENERAL_LESSON'
+type LiveSessionStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED'
+
+interface StudentLiveSession {
+  id: number
+  title: string
+  description: string | null
+  type: LiveSessionType
+  scheduledAt: string
+  durationMinutes: number
+  status: LiveSessionStatus
+  joinAvailable: boolean
+  course: {
+    id: number
+    title: string
+    educator: { id: number; name: string }
+  }
+}
+
+interface StudentLiveSessionsResponse {
+  success: boolean
+  data: StudentLiveSession[]
+}
+
+interface JoinSessionResponse {
+  success: boolean
+  data: { googleMeetUrl: string }
+}
+
+const sessionTypeLabels: Record<LiveSessionType, string> = {
+  TEST: 'Test / Knowledge Assessment',
+  DOUBT_SOLVING: 'Doubt Solving',
+  GENERAL_LESSON: 'General Lesson',
+}
+
+const sessionStatusLabels: Record<LiveSessionStatus, string> = {
+  SCHEDULED: 'Scheduled',
+  CANCELLED: 'Cancelled',
+  COMPLETED: 'Completed',
+}
+
 function StudentDashboard() {
   const { user, logout } = useAuth()
+  const queryClient = useQueryClient()
   const [downloadingCertificateId, setDownloadingCertificateId] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState('')
+  const [joinError, setJoinError] = useState('')
+  const [displayTime, setDisplayTime] = useState(0)
+  const joinPopupRef = useRef<Window | null>(null)
+
+  useEffect(() => {
+    const updateDisplayTime = () => setDisplayTime(Date.now())
+    updateDisplayTime()
+    const interval = window.setInterval(updateDisplayTime, 60_000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  const liveSessionsQuery = useQuery({
+    queryKey: ['student-live-sessions', user?.id],
+    queryFn: async () => {
+      const response = await apiRequest<StudentLiveSessionsResponse>('/live-sessions/student')
+      return response.data
+    },
+    enabled: Boolean(user?.id),
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  })
+
+  const joinSessionMutation = useMutation({
+    mutationFn: (sessionId: number) =>
+      apiRequest<JoinSessionResponse>(`/live-sessions/${sessionId}/join`, { method: 'POST' }),
+    onSuccess: async (response) => {
+      const popup = joinPopupRef.current
+      joinPopupRef.current = null
+      if (!popup || popup.closed) {
+        setJoinError('The meeting tab was closed before it could open. Try joining again.')
+      } else {
+        popup.location.replace(response.data.googleMeetUrl)
+        setJoinError('')
+      }
+      await queryClient.invalidateQueries({ queryKey: ['student-live-sessions', user?.id] })
+    },
+    onError: async (error) => {
+      const popup = joinPopupRef.current
+      joinPopupRef.current = null
+      if (popup && !popup.closed) popup.close()
+      setJoinError(error instanceof Error ? error.message : 'This session is no longer available to join.')
+      await queryClient.invalidateQueries({ queryKey: ['student-live-sessions', user?.id] })
+    },
+  })
 
   const certificatesQuery = useQuery({
     queryKey: ['student-certificates', user?.id],
@@ -291,6 +377,98 @@ function StudentDashboard() {
             </div>
             <span className="nv-sd-stat-decoration" aria-hidden="true">03</span>
           </article>
+        </section>
+
+        <section className="nv-sd-section nv-sd-reveal" aria-labelledby="live-sessions-heading">
+          <div className="nv-sd-section-heading">
+            <div>
+              <p className="nv-sd-section-kicker">LEARN TOGETHER</p>
+              <h2 id="live-sessions-heading">Live sessions</h2>
+              <p className="nv-sd-section-subtitle">Sessions for courses you are enrolled in and included in the audience.</p>
+            </div>
+            <span className="nv-sd-section-symbol" aria-hidden="true">♫</span>
+          </div>
+
+          {joinError && <div role="alert" className="nv-sd-alert nv-sd-alert-error nv-sd-live-alert">{joinError}</div>}
+          {liveSessionsQuery.isLoading && <div className="nv-sd-state-card"><span className="nv-sd-spinner" /> Loading live sessions...</div>}
+          {liveSessionsQuery.isError && (
+            <div role="alert" className="nv-sd-alert nv-sd-alert-error nv-sd-live-query-error">
+              <span>{liveSessionsQuery.error instanceof Error ? liveSessionsQuery.error.message : 'Unable to load live sessions.'}</span>
+              <button type="button" onClick={() => void liveSessionsQuery.refetch()} className="nv-sd-live-retry">Try again</button>
+            </div>
+          )}
+          {!liveSessionsQuery.isLoading && !liveSessionsQuery.isError && liveSessionsQuery.data?.length === 0 && (
+            <div className="nv-sd-empty-card nv-sd-live-empty">
+              <div className="nv-sd-empty-icon" aria-hidden="true">♫</div>
+              <h3>No live sessions on your schedule</h3>
+              <p>When an educator schedules a session for one of your enrolled courses, it will appear here.</p>
+            </div>
+          )}
+          {liveSessionsQuery.data && liveSessionsQuery.data.length > 0 && (() => {
+            const now = displayTime
+            const upcoming = liveSessionsQuery.data
+              .filter((session) => session.status === 'SCHEDULED' && new Date(session.scheduledAt).getTime() >= now)
+              .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+            const history = liveSessionsQuery.data
+              .filter((session) => session.status !== 'SCHEDULED' || new Date(session.scheduledAt).getTime() < now)
+              .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+
+            const renderSession = (session: StudentLiveSession) => {
+              const canJoin = session.status === 'SCHEDULED' && session.joinAvailable
+              return (
+                <article key={session.id} className="nv-sd-live-card">
+                  <div className="nv-sd-live-card-heading">
+                    <div className="nv-sd-live-card-copy">
+                      <span className={`nv-sd-live-status nv-sd-live-status-${session.status.toLowerCase()}`}>
+                        {sessionStatusLabels[session.status]}
+                      </span>
+                      <h3>{session.title}</h3>
+                      <p className="nv-sd-live-course">{session.course.title} <span aria-hidden="true">·</span> {session.course.educator.name}</p>
+                    </div>
+                    <span className="nv-sd-live-type">{sessionTypeLabels[session.type]}</span>
+                  </div>
+                  {session.description && <p className="nv-sd-live-description">{session.description}</p>}
+                  <div className="nv-sd-live-details">
+                    <div><span>Date and time</span><time dateTime={session.scheduledAt}>{new Date(session.scheduledAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time></div>
+                    <div><span>Duration</span><strong>{session.durationMinutes} minutes</strong></div>
+                    <div><span>Join status</span><strong className={canJoin ? 'nv-sd-live-available' : 'nv-sd-live-unavailable'}>{canJoin ? 'Available now' : session.status === 'SCHEDULED' ? 'Not available now' : sessionStatusLabels[session.status]}</strong></div>
+                  </div>
+                  {session.status === 'SCHEDULED' && (
+                    <div className="nv-sd-live-action-row">
+                      {!canJoin && <p className="nv-sd-live-hint">Joining is available only during the session window when the educator has added a link.</p>}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canJoin || joinSessionMutation.isPending) return
+                          setJoinError('')
+                          joinSessionMutation.reset()
+                          const popup = window.open('about:blank', '_blank')
+                          if (!popup) {
+                            setJoinError('Allow pop-ups for NoteVerse to open the authorized meeting in a new tab.')
+                            return
+                          }
+                          popup.opener = null
+                          joinPopupRef.current = popup
+                          joinSessionMutation.mutate(session.id)
+                        }}
+                        disabled={!canJoin || joinSessionMutation.isPending}
+                        className="nv-sd-button nv-sd-button-live"
+                      >
+                        {joinSessionMutation.isPending ? 'Authorizing…' : 'Join session'} <span aria-hidden="true">↗</span>
+                      </button>
+                    </div>
+                  )}
+                </article>
+              )
+            }
+
+            return (
+              <div className="nv-sd-live-groups">
+                {upcoming.length > 0 && <div className="nv-sd-live-group"><h3>Upcoming</h3><div className="nv-sd-live-list">{upcoming.map(renderSession)}</div></div>}
+                  {history.length > 0 && <div className="nv-sd-live-group"><h3>Past and closed sessions</h3><div className="nv-sd-live-list">{history.map(renderSession)}</div></div>}
+              </div>
+            )
+          })()}
         </section>
 
         <section className="nv-sd-section nv-sd-reveal">

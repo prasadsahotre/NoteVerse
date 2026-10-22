@@ -16,6 +16,7 @@ import certificateRoutes from './routes/certificate.routes.js'
 import analyticsRoutes from './routes/analytics.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import reportRoutes from './routes/report.routes.js'
+import liveSessionRoutes from './routes/live-session.routes.js'
 
 const app = express()
 
@@ -45,5 +46,6 @@ app.use('/api/v1/certificates', certificateRoutes)
 app.use('/api/v1/analytics', analyticsRoutes)
 app.use('/api/v1/admin', adminRoutes)
 app.use('/api/v1/reports', reportRoutes)
+app.use('/api/v1/live-sessions', liveSessionRoutes)
 
 export default app

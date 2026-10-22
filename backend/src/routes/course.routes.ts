@@ -729,6 +729,7 @@ router.delete(
                   reviews: true,
                   certificates: true,
                   reports: true,
+                  liveSessions: true,
                 },
               },
             },

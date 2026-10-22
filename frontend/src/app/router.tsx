@@ -4,6 +4,7 @@ import NotFoundPage from '../pages/NotFoundPage'
 import StudentDashboard from '../pages/StudentDashboard'
 import EducatorDashboard from '../pages/EducatorDashboard'
 import EducatorCurriculumPage from '../pages/EducatorCurriculumPage'
+import EducatorLiveSessionsPage from '../pages/EducatorLiveSessionsPage'
 import AdminDashboard from '../pages/AdminDashboard'
 import ProtectedRoute from '../components/ProtectedRoute'
 import StudentCoursePage from '../pages/StudentCoursePage'
@@ -62,6 +63,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={['STUDENT']}>
         <StudentQuizPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/educator/live-sessions',
+    element: (
+      <ProtectedRoute allowedRoles={['EDUCATOR']}>
+        <EducatorLiveSessionsPage />
       </ProtectedRoute>
     ),
   },

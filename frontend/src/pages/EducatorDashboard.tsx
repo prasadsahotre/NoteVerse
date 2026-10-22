@@ -301,12 +301,20 @@ function EducatorDashboard() {
               A clear view of course engagement and student progress.
             </p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="self-start rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800 sm:self-auto"
-          >
-            Logout
-          </button>
+          <div className="flex flex-wrap gap-3 self-start sm:self-auto">
+            <Link
+              to="/educator/live-sessions"
+              className="rounded-xl border border-indigo-300/25 bg-indigo-300/[0.08] px-4 py-2.5 text-sm font-semibold text-indigo-100 transition hover:bg-indigo-300/[0.14]"
+            >
+              Live Sessions
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:border-slate-600 hover:bg-slate-800"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <section data-ed-reveal aria-labelledby="my-courses-heading" className="nv-ed-section mt-10">

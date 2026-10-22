@@ -27,6 +27,7 @@ model User {
   courseReviews   CourseReview[]
   certificates    Certificate[]
   reports         Report[]
+  liveSessionAudiences LiveSessionAudience[]
 }
 
 enum EducatorApprovalStatus {
@@ -70,11 +71,62 @@ model Course {
   reviews      CourseReview[]
   certificates Certificate[]
   reports      Report[]
+  liveSessions LiveSession[]
 }
 
 enum CourseStatus {
   DRAFT
   PUBLISHED
+}
+
+enum LiveSessionType {
+  TEST
+  DOUBT_SOLVING
+  GENERAL_LESSON
+}
+
+enum LiveSessionStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+enum LiveSessionAudienceMode {
+  ALL_ENROLLED
+  SELECTED
+}
+
+model LiveSession {
+  id              Int                     @id @default(autoincrement())
+  courseId        Int
+  title           String
+  description     String?
+  type            LiveSessionType
+  scheduledAt     DateTime                @db.Timestamptz(3)
+  durationMinutes Int
+  googleMeetUrl   String?
+  status          LiveSessionStatus       @default(SCHEDULED)
+  audienceMode    LiveSessionAudienceMode
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  course   Course                @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  audience LiveSessionAudience[]
+
+  @@index([courseId, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+model LiveSessionAudience {
+  sessionId Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@index([userId, sessionId])
 }
 
 model Module {
