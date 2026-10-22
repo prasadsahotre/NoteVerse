@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test dist/routes/enrollment.routes.test.js dist/routes/live-session.routes.test.js",
+    "test": "npm run build && node --test dist/test-utils/testDatabaseSafety.test.js dist/routes/enrollment.routes.test.js dist/routes/live-session.routes.test.js",
     "lint": "eslint ."
   },
   "dependencies": {

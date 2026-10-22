@@ -5,16 +5,15 @@ import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import { test } from 'node:test'
 import jwt from 'jsonwebtoken'
+import { getTestDatabaseConfiguration, runTestCleanup } from '../test-utils/testDatabaseSafety.js'
 
-const testDatabaseUrl = process.env.DATABASE_URL_TEST
+const testDatabase = getTestDatabaseConfiguration()
 
-if (!testDatabaseUrl) {
-  test('educator enrollment data isolation', { skip: 'Set DATABASE_URL_TEST to a dedicated migrated test database.' }, () => {})
-} else if (!new URL(testDatabaseUrl).pathname.toLowerCase().includes('test')) {
-  test('educator enrollment data isolation', { skip: 'DATABASE_URL_TEST database name must include "test" to protect real data.' }, () => {})
+if (testDatabase.status === 'skip') {
+  test('educator enrollment data isolation', { skip: testDatabase.reason }, () => {})
 } else {
   test('educator enrollment data isolation and authorization', async (t) => {
-    process.env.DATABASE_URL = testDatabaseUrl
+    process.env.DATABASE_URL = testDatabase.url!
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'noteverse-enrollment-test-secret'
 
     const [{ default: prisma }, { default: app }] = await Promise.all([
@@ -25,16 +24,23 @@ if (!testDatabaseUrl) {
     const suffix = randomUUID()
     const createdUserIds: number[] = []
     const createdCourseIds: number[] = []
+    const createdEnrollmentIds: number[] = []
     let server: ReturnType<typeof app.listen> | undefined
+    let primaryFailure: unknown
 
     try {
+      await Promise.all(['EDUCATOR', 'STUDENT', 'ADMIN'].map((name) => prisma.role.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      })))
       const roles = await prisma.role.findMany({
         where: { name: { in: ['EDUCATOR', 'STUDENT', 'ADMIN'] } },
       })
       const roleIds = new Map(roles.map((role) => [role.name, role.id]))
-      assert.ok(roleIds.has('EDUCATOR'), 'EDUCATOR role must be seeded')
-      assert.ok(roleIds.has('STUDENT'), 'STUDENT role must be seeded')
-      assert.ok(roleIds.has('ADMIN'), 'ADMIN role must be seeded')
+      assert.ok(roleIds.has('EDUCATOR'), 'EDUCATOR role fixture must exist')
+      assert.ok(roleIds.has('STUDENT'), 'STUDENT role fixture must exist')
+      assert.ok(roleIds.has('ADMIN'), 'ADMIN role fixture must exist')
 
       const createUser = async (
         name: string,
@@ -72,10 +78,11 @@ if (!testDatabaseUrl) {
       const studentB = await createUser('Student B', 'STUDENT', 'NOT_APPLICABLE')
       const courseA = await createCourse('Educator A course', educatorA.id)
       const courseB = await createCourse('Educator B course', educatorB.id)
-      await Promise.all([
+      const enrollments = await Promise.all([
         prisma.enrollment.create({ data: { userId: studentA.id, courseId: courseA.id } }),
         prisma.enrollment.create({ data: { userId: studentB.id, courseId: courseB.id } }),
       ])
+      createdEnrollmentIds.push(...enrollments.map(({ id }) => id))
 
       server = app.listen(0)
       await new Promise<void>((resolve, reject) => {
@@ -118,17 +125,34 @@ if (!testDatabaseUrl) {
         assert.equal((await request()).status, 401)
         assert.equal((await request('not-a-valid-token')).status, 401)
       })
+    } catch (error) {
+      primaryFailure = error
+      throw error
     } finally {
-      if (server) {
-        await new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve()))
+      const cleanupFailures = await runTestCleanup([
+        ...(server ? [{
+          label: 'close test HTTP server',
+          run: () => new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve())),
+        }] : []),
+        ...(createdEnrollmentIds.length > 0 ? [{
+          label: 'delete test enrollments',
+          run: () => prisma.enrollment.deleteMany({ where: { id: { in: createdEnrollmentIds } } }),
+        }] : []),
+        ...(createdCourseIds.length > 0 ? [{
+          label: 'delete test courses',
+          run: () => prisma.course.deleteMany({ where: { id: { in: createdCourseIds } } }),
+        }] : []),
+        ...(createdUserIds.length > 0 ? [{
+          label: 'delete test users',
+          run: () => prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }),
+        }] : []),
+        { label: 'disconnect test Prisma client', run: () => prisma.$disconnect() },
+      ])
+      if (cleanupFailures.length > 0) {
+        const message = `Test cleanup failed: ${cleanupFailures.join(', ')}`
+        if (primaryFailure) console.error(`${message}; the original test failure is preserved.`)
+        else throw new Error(message)
       }
-      if (createdCourseIds.length > 0) {
-        await prisma.course.deleteMany({ where: { id: { in: createdCourseIds } } })
-      }
-      if (createdUserIds.length > 0) {
-        await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } })
-      }
-      await prisma.$disconnect()
     }
   })
 }

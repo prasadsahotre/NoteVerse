@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { test } from 'node:test'
 import jwt from 'jsonwebtoken'
 import { isJoinWindowOpen, parseScheduledTimestamp } from '../utils/liveSessionValidation.js'
+import { getTestDatabaseConfiguration, runTestCleanup } from '../test-utils/testDatabaseSafety.js'
 
 test('strictly validates and normalizes scheduled timestamps', async (t) => {
   const invalidInputs: Array<[string, unknown]> = [
@@ -56,15 +57,13 @@ test('join window includes its opening instant and excludes its closing instant'
   assert.equal(isJoinWindowOpen(scheduledAt, durationMinutes, new Date(closing + 1)), false)
 })
 
-const testDatabaseUrl = process.env.DATABASE_URL_TEST
+const testDatabase = getTestDatabaseConfiguration()
 
-if (!testDatabaseUrl) {
-  test('live session authorization and lifecycle', { skip: 'Set DATABASE_URL_TEST to a dedicated migrated test database.' }, () => {})
-} else if (!new URL(testDatabaseUrl).pathname.toLowerCase().includes('test')) {
-  test('live session authorization and lifecycle', { skip: 'DATABASE_URL_TEST database name must include "test" to protect real data.' }, () => {})
+if (testDatabase.status === 'skip') {
+  test('live session authorization and lifecycle', { skip: testDatabase.reason }, () => {})
 } else {
   test('live session audience, permissions, join window, and lifecycle', async (t) => {
-    process.env.DATABASE_URL = testDatabaseUrl
+    process.env.DATABASE_URL = testDatabase.url!
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'noteverse-live-session-test-secret'
 
     const [{ default: prisma }, { default: app }] = await Promise.all([
@@ -78,12 +77,18 @@ if (!testDatabaseUrl) {
     const createdSessionIds: number[] = []
     const createdEnrollmentIds: number[] = []
     let server: ReturnType<typeof app.listen> | undefined
+    let primaryFailure: unknown
 
     try {
+      await Promise.all(['EDUCATOR', 'STUDENT'].map((name) => prisma.role.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      })))
       const roles = await prisma.role.findMany({ where: { name: { in: ['EDUCATOR', 'STUDENT'] } } })
       const roleIds = new Map(roles.map((role) => [role.name, role.id]))
-      assert.ok(roleIds.has('EDUCATOR'), 'EDUCATOR role must be seeded')
-      assert.ok(roleIds.has('STUDENT'), 'STUDENT role must be seeded')
+      assert.ok(roleIds.has('EDUCATOR'), 'EDUCATOR role fixture must exist')
+      assert.ok(roleIds.has('STUDENT'), 'STUDENT role fixture must exist')
 
       const createUser = async (name: string, role: 'EDUCATOR' | 'STUDENT', approval = 'NOT_APPLICABLE') => {
         const user = await prisma.user.create({
@@ -116,8 +121,8 @@ if (!testDatabaseUrl) {
         createdEnrollmentIds.push(enrollment.id)
         return enrollment
       }
-      const enrollmentA = await enroll(studentA.id)
-      const enrollmentB = await enroll(studentB.id)
+      const initialEnrollments = await Promise.all([enroll(studentA.id), enroll(studentB.id)])
+      const [enrollmentA, enrollmentB] = initialEnrollments
 
       server = app.listen(0)
       await new Promise<void>((resolve, reject) => {
@@ -327,16 +332,41 @@ if (!testDatabaseUrl) {
         const response = await request(`/courses/${emptyCourse.id}`, ownerToken, 'DELETE')
         assert.equal(response.status, 409)
       })
+    } catch (error) {
+      primaryFailure = error
+      throw error
     } finally {
-      if (server) await new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve()))
-      if (createdSessionIds.length > 0) {
-        await prisma.liveSessionAudience.deleteMany({ where: { sessionId: { in: createdSessionIds } } })
-        await prisma.liveSession.deleteMany({ where: { id: { in: createdSessionIds } } })
+      const cleanupFailures = await runTestCleanup([
+        ...(server ? [{
+          label: 'close test HTTP server',
+          run: () => new Promise<void>((resolve, reject) => server!.close((error) => error ? reject(error) : resolve())),
+        }] : []),
+        ...(createdSessionIds.length > 0 ? [{
+          label: 'delete test session audience rows',
+          run: () => prisma.liveSessionAudience.deleteMany({ where: { sessionId: { in: createdSessionIds } } }),
+        }, {
+          label: 'delete test sessions',
+          run: () => prisma.liveSession.deleteMany({ where: { id: { in: createdSessionIds } } }),
+        }] : []),
+        ...(createdEnrollmentIds.length > 0 ? [{
+          label: 'delete test enrollments',
+          run: () => prisma.enrollment.deleteMany({ where: { id: { in: createdEnrollmentIds } } }),
+        }] : []),
+        ...(createdCourseIds.length > 0 ? [{
+          label: 'delete test courses',
+          run: () => prisma.course.deleteMany({ where: { id: { in: createdCourseIds } } }),
+        }] : []),
+        ...(createdUserIds.length > 0 ? [{
+          label: 'delete test users',
+          run: () => prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }),
+        }] : []),
+        { label: 'disconnect test Prisma client', run: () => prisma.$disconnect() },
+      ])
+      if (cleanupFailures.length > 0) {
+        const message = `Test cleanup failed: ${cleanupFailures.join(', ')}`
+        if (primaryFailure) console.error(`${message}; the original test failure is preserved.`)
+        else throw new Error(message)
       }
-      if (createdEnrollmentIds.length > 0) await prisma.enrollment.deleteMany({ where: { id: { in: createdEnrollmentIds } } })
-      if (createdCourseIds.length > 0) await prisma.course.deleteMany({ where: { id: { in: createdCourseIds } } })
-      if (createdUserIds.length > 0) await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } })
-      await prisma.$disconnect()
     }
   })
 }
