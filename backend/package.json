@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test dist/test-utils/testDatabaseSafety.test.js dist/routes/enrollment.routes.test.js dist/routes/live-session.routes.test.js",

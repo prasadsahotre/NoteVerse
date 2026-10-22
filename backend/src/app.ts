@@ -20,12 +20,48 @@ import liveSessionRoutes from './routes/live-session.routes.js'
 
 const app = express()
 
+const localDevelopmentOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]
+
+const configuredFrontendOrigins = (process.env.FRONTEND_URL ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+  .map((origin) => {
+    let parsedOrigin: URL
+
+    try {
+      parsedOrigin = new URL(origin)
+    } catch {
+      throw new Error('FRONTEND_URL must contain valid frontend origin URLs.')
+    }
+
+    if (
+      !['http:', 'https:'].includes(parsedOrigin.protocol) ||
+      parsedOrigin.pathname !== '/' ||
+      parsedOrigin.search ||
+      parsedOrigin.hash
+    ) {
+      throw new Error('FRONTEND_URL must contain valid frontend origin URLs.')
+    }
+
+    return parsedOrigin.origin
+  })
+
+if (process.env.NODE_ENV === 'production' && configuredFrontendOrigins.length === 0) {
+  throw new Error('FRONTEND_URL must be configured with the production frontend origin.')
+}
+
+const allowedOrigins = [
+  ...(process.env.NODE_ENV === 'production' ? [] : localDevelopmentOrigins),
+  ...configuredFrontendOrigins,
+]
+
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-    ],
+    origin: allowedOrigins,
   }),
 )
 
